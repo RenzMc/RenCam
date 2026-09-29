@@ -1021,36 +1021,6 @@
     </string-array>
 
     <!-- RenCam: Live Photo -->
-    <string-array name="live_photo_duration_entries">
-        <item>@string/live_photo_duration_1s</item>
-        <item>@string/live_photo_duration_2s</item>
-        <item>@string/live_photo_duration_3s</item>
-        <item>@string/live_photo_duration_4s</item>
-        <item>@string/live_photo_duration_5s</item>
-        <item>@string/live_photo_duration_6s</item>
-    </string-array>
-    <string-array name="live_photo_duration_values">
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
-        <item>4</item>
-        <item>5</item>
-        <item>6</item>
-    </string-array>
-    <string-array name="live_photo_preroll_entries">
-        <item>0.5 s</item>
-        <item>1.0 s</item>
-        <item>1.5 s</item>
-        <item>2.0 s</item>
-        <item>2.5 s</item>
-    </string-array>
-    <string-array name="live_photo_preroll_values">
-        <item>500</item>
-        <item>1000</item>
-        <item>1500</item>
-        <item>2000</item>
-        <item>2500</item>
-    </string-array>
     <string-array name="live_photo_flash_entries">
         <item>@string/preference_live_photo_flash_on</item>
         <item>@string/preference_live_photo_flash_off</item>

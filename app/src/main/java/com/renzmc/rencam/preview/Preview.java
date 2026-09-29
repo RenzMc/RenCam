@@ -5870,8 +5870,15 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 
     /** RenCam Live Photo: stops the background video buffer and returns the recorded file (or null). */
     public File stopLivePhotoBuffer() {
+        return stopLivePhotoBuffer(true);
+    }
+
+    /** RenCam Live Photo: stops the background video buffer and returns the recorded file (or null).
+     *  @param reconnect if true, reconnect the camera and restart the normal preview afterwards
+     *                   (using the same proven path as when a normal video recording is stopped). */
+    public File stopLivePhotoBuffer(boolean reconnect) {
         if( MyDebug.LOG )
-            Log.d(TAG, "stopLivePhotoBuffer");
+            Log.d(TAG, "stopLivePhotoBuffer: reconnect=" + reconnect);
         MediaRecorder local_recorder = this.live_photo_recorder;
         File file = this.live_photo_buffer_file;
         this.live_photo_recorder = null;
@@ -5896,9 +5903,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         catch(Exception e) {
             e.printStackTrace();
         }
-        // Restore the normal preview session (reconnect the camera and restart the preview), using
-        // the same proven path as when a normal video recording is stopped.
-        reconnectCamera(false);
+        if( reconnect ) {
+            // Restore the normal preview session (reconnect the camera and restart the preview).
+            reconnectCamera(false);
+        }
         return file;
     }
 

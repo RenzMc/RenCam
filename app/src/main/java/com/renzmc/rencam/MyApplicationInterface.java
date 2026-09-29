@@ -2885,15 +2885,16 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
     public void onPreviewStarted() {
         if( MyDebug.LOG )
             Log.d(TAG, "onPreviewStarted");
-        // RenCam: Live Photo no longer buffers the preview continuously - it records a short video
-        // only when the shutter is pressed (see LivePhotoManager.captureLivePhoto()).
+        // RenCam: start the continuous Live Photo video buffer now that the preview is running.
+        getLivePhotoManager().onPreviewStarted();
     }
 
     @Override
     public void onPreviewStopped() {
         if( MyDebug.LOG )
             Log.d(TAG, "onPreviewStopped");
-        // RenCam: nothing to do - Live Photo recording is started/stopped around the shutter press.
+        // RenCam: stop the continuous Live Photo video buffer.
+        getLivePhotoManager().onPreviewStopped();
     }
 
     @Override

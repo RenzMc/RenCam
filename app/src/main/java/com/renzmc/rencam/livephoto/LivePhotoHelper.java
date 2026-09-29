@@ -499,14 +499,21 @@ public final class LivePhotoHelper {
         MediaExtractor extractor = new MediaExtractor();
         MediaMuxer muxer = null;
         FileDescriptor pfd = null;
+        android.os.ParcelFileDescriptor parcelFd = null;
         try {
-            android.os.ParcelFileDescriptor parcelFd =
-                    context.getContentResolver().openFileDescriptor(inputUri, "r");
-            if (parcelFd == null) {
-                return false;
+            if ("file".equals(inputUri.getScheme()) && inputUri.getPath() != null) {
+                // A plain file:// Uri - open it directly (ContentResolver.openFileDescriptor is not
+                // reliable for file:// Uris on all Android versions).
+                extractor.setDataSource(inputUri.getPath());
             }
-            pfd = parcelFd.getFileDescriptor();
-            extractor.setDataSource(pfd);
+            else {
+                parcelFd = context.getContentResolver().openFileDescriptor(inputUri, "r");
+                if (parcelFd == null) {
+                    return false;
+                }
+                pfd = parcelFd.getFileDescriptor();
+                extractor.setDataSource(pfd);
+            }
 
             int trackCount = extractor.getTrackCount();
             java.util.HashMap<Integer, Integer> trackIndices = new java.util.HashMap<>();
@@ -589,7 +596,9 @@ public final class LivePhotoHelper {
                 extractor.advance();
             }
 
-            parcelFd.close();
+            if (parcelFd != null) {
+                parcelFd.close();
+            }
             Log.d(TAG, "Trimming video succeeded! Start: " + startMs + " ms, End: " + endMs + " ms");
             return true;
         } catch (Exception e) {
@@ -625,6 +634,18 @@ public final class LivePhotoHelper {
                 }
             }
         }
+    }
+
+    /**
+     * Convenience overload of {@link #trimVideo(Context, Uri, File, long, long)} for a plain input
+     * file (the Live Photo buffer is always recorded to a file in the cache directory).
+     */
+    public static boolean trimVideo(Context context, File inputFile, File outputFile,
+                                    long startMs, long endMs) {
+        if (inputFile == null || !inputFile.exists()) {
+            return false;
+        }
+        return trimVideo(context, Uri.fromFile(inputFile), outputFile, startMs, endMs);
     }
 
     // ---------------------------------------------------------------------------------------------

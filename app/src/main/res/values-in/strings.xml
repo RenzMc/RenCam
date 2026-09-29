@@ -734,14 +734,10 @@
     <string name="preference_category_live_photo">Foto Live</string>
     <string name="preference_live_photo_enable">Aktifkan Foto Live</string>
     <string name="preference_live_photo_enable_summary">Ambil klip video pendek bersama setiap foto, lalu gabungkan menjadi satu Foto Live (Motion Photo). Foto utama tetap berupa JPEG resolusi penuh, dan video disematkan di dalamnya.</string>
-    <string name="preference_live_photo_duration">Durasi klip Foto Live</string>
-    <string name="preference_live_photo_duration_summary">Total durasi video yang direkam untuk Foto Live. Foto utama diambil dari salah satu bingkai di dalam klip ini.\n%s</string>
-    <string name="preference_live_photo_preroll">Posisi bingkai foto utama</string>
-    <string name="preference_live_photo_preroll_summary">Seberapa jauh ke dalam klip rekaman foto utama diambil (agar ada gerakan sebelum dan sesudah foto).\n%s</string>
     <string name="preference_live_photo_flash_behavior">Flash untuk Foto Live</string>
-    <string name="preference_live_photo_flash_behavior_summary">Mengontrol bagaimana flash digunakan saat merekam Foto Live.\n%s</string>
+    <string name="preference_live_photo_flash_behavior_summary">Mengontrol bagaimana flash digunakan saat mengambil Foto Live.\n%s</string>
     <string name="preference_live_photo_flash_on">Nyala (disarankan)</string>
-    <string name="preference_live_photo_flash_on_summary">Terangi Foto Live: lampu LED tetap menyala selama klip direkam. Pada kamera depan (yang tidak punya LED) layar akan menyala putih terang dengan efek cahaya di pinggirnya.</string>
+    <string name="preference_live_photo_flash_on_summary">Memancarkan kilatan flash singkat tepat pada saat foto diambil (seperti flash foto biasa), sehingga video klipnya tetap alami dan tidak terang sepanjang waktu. Pada kamera depan (yang tidak punya LED) layar akan berkedip putih terang dengan efek cahaya di pinggirnya.</string>
     <string name="preference_live_photo_flash_off">Mati</string>
     <string name="preference_live_photo_flash_off_summary">Tidak menggunakan flash untuk Foto Live.</string>
     <string name="preference_live_photo_audio">Rekam audio pada Foto Live</string>
@@ -754,12 +750,6 @@
     <string name="live_photo_not_supported">Foto Live tidak didukung di perangkat ini</string>
     <string name="live_photo_buffering">Menyangga video untuk Foto Live\u2026</string>
     <string name="live_photo_hold_steady">Tahan kamera dengan stabil untuk Foto Live</string>
-    <string name="live_photo_duration_1s">1 detik</string>
-    <string name="live_photo_duration_2s">2 detik</string>
-    <string name="live_photo_duration_3s">3 detik</string>
-    <string name="live_photo_duration_4s">4 detik</string>
-    <string name="live_photo_duration_5s">5 detik</string>
-    <string name="live_photo_duration_6s">6 detik</string>
 
     <!-- Pengaturan bahasa -->
     <string name="preference_category_language">Bahasa</string>

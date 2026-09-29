@@ -1088,14 +1088,10 @@
     <string name="preference_category_live_photo">Live Photo</string>
     <string name="preference_live_photo_enable">Enable Live Photo</string>
     <string name="preference_live_photo_enable_summary">Capture a short video clip together with every photo, then merge them into a single Live Photo (Motion Photo). The main photo remains a full-resolution JPEG, with the video embedded inside it.</string>
-    <string name="preference_live_photo_duration">Live Photo clip duration</string>
-    <string name="preference_live_photo_duration_summary">Total length of the video recorded for the Live Photo. The cover photo is taken from a frame within this clip.\n%s</string>
-    <string name="preference_live_photo_preroll">Cover frame position</string>
-    <string name="preference_live_photo_preroll_summary">How far into the recorded clip the cover photo is taken (so there is motion both before and after the still).\n%s</string>
     <string name="preference_live_photo_flash_behavior">Flash for Live Photo</string>
-    <string name="preference_live_photo_flash_behavior_summary">Controls how the flash is used while recording the Live Photo.\n%s</string>
+    <string name="preference_live_photo_flash_behavior_summary">Controls how the flash is used while capturing the Live Photo.\n%s</string>
     <string name="preference_live_photo_flash_on">On (recommended)</string>
-    <string name="preference_live_photo_flash_on_summary">Light the Live Photo: the LED stays on while the clip is recorded. On the front camera (which has no LED) the screen lights up bright white with a soft glow around the edges instead.</string>
+    <string name="preference_live_photo_flash_on_summary">Fire a brief flash burst at the exact moment the still is captured (like a normal photo flash), so the video clip stays natural instead of being lit the whole time. On the front camera (which has no LED) the screen flashes bright white with a soft glow around the edges instead.</string>
     <string name="preference_live_photo_flash_off">Off</string>
     <string name="preference_live_photo_flash_off_summary">Do not use the flash for Live Photo.</string>
     <string name="preference_live_photo_audio">Record audio on Live Photo</string>
@@ -1111,12 +1107,6 @@
     <string name="live_photo_not_supported">Live Photo is not supported on this device</string>
     <string name="live_photo_buffering">Buffering video for Live Photo\u2026</string>
     <string name="live_photo_hold_steady">Hold the camera steady for Live Photo</string>
-    <string name="live_photo_duration_1s">1 second</string>
-    <string name="live_photo_duration_2s">2 seconds</string>
-    <string name="live_photo_duration_3s">3 seconds</string>
-    <string name="live_photo_duration_4s">4 seconds</string>
-    <string name="live_photo_duration_5s">5 seconds</string>
-    <string name="live_photo_duration_6s">6 seconds</string>
 
     <!-- Language settings -->
     <string name="preference_category_language">Language</string>

@@ -1405,24 +1405,6 @@
                 />
 
             <ListPreference
-                android:key="preference_live_photo_duration"
-                android:title="@string/preference_live_photo_duration"
-                android:summary="@string/preference_live_photo_duration_summary"
-                android:defaultValue="3"
-                android:entries="@array/live_photo_duration_entries"
-                android:entryValues="@array/live_photo_duration_values"
-                />
-
-            <ListPreference
-                android:key="preference_live_photo_preroll"
-                android:title="@string/preference_live_photo_preroll"
-                android:summary="@string/preference_live_photo_preroll_summary"
-                android:defaultValue="1500"
-                android:entries="@array/live_photo_preroll_entries"
-                android:entryValues="@array/live_photo_preroll_values"
-                />
-
-            <ListPreference
                 android:key="preference_live_photo_flash_behavior"
                 android:title="@string/preference_live_photo_flash_behavior"
                 android:summary="@string/preference_live_photo_flash_behavior_summary"

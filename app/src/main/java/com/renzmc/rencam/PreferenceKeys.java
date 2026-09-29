@@ -367,8 +367,6 @@ public class PreferenceKeys {
 
     // RenCam: Live Photo (Motion Photo) feature
     public static final String LivePhotoEnablePreferenceKey = "preference_live_photo_enable";
-    public static final String LivePhotoDurationPreferenceKey = "preference_live_photo_duration";
-    public static final String LivePhotoPrerollPreferenceKey = "preference_live_photo_preroll";
     public static final String LivePhotoFlashBehaviorPreferenceKey = "preference_live_photo_flash_behavior";
     public static final String LivePhotoAudioPreferenceKey = "preference_live_photo_audio";
 
