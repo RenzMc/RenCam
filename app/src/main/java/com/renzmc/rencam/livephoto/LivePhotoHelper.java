@@ -335,7 +335,7 @@ public final class LivePhotoHelper {
     public static String extractXmpXml(byte[] bytes) {
         try {
             int ftypIdx = findSubarray(bytes, FTYP);
-            int searchLimit = ftypIdx != -1 ? ftypIdx : Math.min(bytes.size(), 2 * 1024 * 1024);
+            int searchLimit = ftypIdx != -1 ? ftypIdx : Math.min(bytes.length, 2 * 1024 * 1024);
 
             byte[] headerBytes = "<?xpacket begin".getBytes(java.nio.charset.StandardCharsets.UTF_8);
             byte[] head = new byte[searchLimit];

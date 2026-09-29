@@ -230,7 +230,6 @@ public class MainActivity extends AppCompatActivity {
     private long cached_display_rotation_time_ms;
     private int cached_display_rotation;
 
-    @Override
     /** RenCam: applies the user's in-app language choice (Indonesian / English / system default)
      *  before the activity is created, so all resources are resolved in the correct locale.
      */
