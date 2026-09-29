@@ -607,6 +607,8 @@ public class MainUI {
             view.setLayoutParams(layoutParams);
             setViewRotation(view, ui_rotation);
 
+            // RenCam: front/back camera switch button - placed to the RIGHT of the shutter button
+            // (ui_independent_above == RIGHT_OF in portrait), vertically centred with it.
             view = main_activity.findViewById(R.id.switch_camera);
             layoutParams = (RelativeLayout.LayoutParams)view.getLayoutParams();
             layoutParams.addRule(align_parent_left, 0);

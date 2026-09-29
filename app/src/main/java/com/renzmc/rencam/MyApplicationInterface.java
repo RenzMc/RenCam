@@ -14,6 +14,7 @@ import java.util.TimerTask;
 
 import com.renzmc.rencam.cameracontroller.CameraController;
 import com.renzmc.rencam.cameracontroller.RawImage;
+import com.renzmc.rencam.livephoto.LivePhotoHost;
 import com.renzmc.rencam.livephoto.LivePhotoManager;
 import com.renzmc.rencam.preview.ApplicationInterface;
 import com.renzmc.rencam.preview.BasicApplicationInterface;
@@ -60,7 +61,7 @@ import androidx.annotation.RequiresApi;
 
 /** Our implementation of ApplicationInterface, see there for details.
  */
-public class MyApplicationInterface extends BasicApplicationInterface {
+public class MyApplicationInterface extends BasicApplicationInterface implements LivePhotoHost {
     private static final String TAG = "MyApplicationInterface";
 
     // note, okay to change the order of enums in future versions, as getPhotoMode() does not rely on the order for the saved photo mode
@@ -87,6 +88,10 @@ public class MyApplicationInterface extends BasicApplicationInterface {
     private final StorageUtils storageUtils;
     private final DrawPreview drawPreview;
     private final ImageSaver imageSaver;
+
+    /** RenCam Live Photo: when true, the image currently being saved is forced to JPEG (Motion
+     *  Photos must be JPEG, regardless of the user's chosen still image format). */
+    private boolean force_jpeg_for_live_photo = false;
 
     private final static float panorama_pics_per_screen = 3.33333f;
     private int n_capture_images = 0; // how many calls to onPictureTaken() since the last call to onCaptureStarted()
@@ -210,12 +215,69 @@ public class MyApplicationInterface extends BasicApplicationInterface {
     public LivePhotoManager getLivePhotoManager() {
         if( livePhotoManager == null ) {
             livePhotoManager = new LivePhotoManager(main_activity, sharedPreferences, main_activity.getPreview());
+            livePhotoManager.setHost(this);
         }
         else {
             // keep the Preview reference up to date (it may have been recreated)
             livePhotoManager.setPreview(main_activity.getPreview());
         }
         return livePhotoManager;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // LivePhotoHost implementation
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Saves the cover frame extracted from the recorded Live Photo video, using the normal still
+     * image pipeline (so it honours the user's storage / stamping / EXIF preferences). Once the
+     * still has been written, {@link #addLastImage(File, boolean)} (or its SAF/MediaStore
+     * counterparts) will be called, which in turn tells the Live Photo manager to package the video
+     * into the saved JPEG - turning it into a Motion Photo.
+     */
+    @Override
+    public boolean saveLivePhotoCover(byte[] jpeg, Date date) {
+        if( MyDebug.LOG )
+            Log.d(TAG, "saveLivePhotoCover");
+        if( jpeg == null ) {
+            return false;
+        }
+        List<byte []> images = new ArrayList<>();
+        images.add(jpeg);
+        // A Motion Photo must be a JPEG, so force JPEG output for the cover frame even if the user
+        // has selected WEBP/PNG as their still image format. saveImage() reads the format
+        // synchronously (before dispatching to the background saver), so toggling the flag around
+        // the call is safe.
+        force_jpeg_for_live_photo = true;
+        try {
+            return saveImage(false, images, date);
+        }
+        finally {
+            force_jpeg_for_live_photo = false;
+        }
+    }
+
+    @Override
+    public boolean isFrontFacing() {
+        Preview preview = main_activity.getPreview();
+        return preview != null && preview.getCameraController() != null &&
+                preview.getCameraController().getFacing() == CameraController.Facing.FACING_FRONT;
+    }
+
+    @Override
+    public void showToast(int string_id) {
+        main_activity.getPreview().showToast(null, string_id, true);
+    }
+
+    /** Turns off the front screen flash (used after a Live Photo recording on the front camera). */
+    public void turnFrontScreenFlashOff() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "turnFrontScreenFlashOff");
+        if( used_front_screen_flash ) {
+            main_activity.setBrightnessForCamera(false);
+            used_front_screen_flash = false;
+        }
+        drawPreview.turnFrontScreenFlashOff();
     }
 
     /** Here we save states which aren't saved in preferences (we don't want them to be saved if the
@@ -1738,6 +1800,10 @@ public class MyApplicationInterface extends BasicApplicationInterface {
     }
 
     private ImageSaver.Request.ImageFormat getImageFormatPref() {
+        if( force_jpeg_for_live_photo ) {
+            // RenCam Live Photo: a Motion Photo must be a JPEG, so force JPEG while saving the cover.
+            return ImageSaver.Request.ImageFormat.STD;
+        }
         switch( sharedPreferences.getString(PreferenceKeys.ImageFormatPreferenceKey, "preference_image_format_jpeg") ) {
             case "preference_image_format_webp":
                 return ImageSaver.Request.ImageFormat.WEBP;
@@ -2819,26 +2885,33 @@ public class MyApplicationInterface extends BasicApplicationInterface {
     public void onPreviewStarted() {
         if( MyDebug.LOG )
             Log.d(TAG, "onPreviewStarted");
-        // RenCam: only buffer video for Live Photo when we're in photo mode
-        if( main_activity.getPreview().isVideo() )
-            return;
-        getLivePhotoManager().startBuffering();
+        // RenCam: Live Photo no longer buffers the preview continuously - it records a short video
+        // only when the shutter is pressed (see LivePhotoManager.captureLivePhoto()).
     }
 
     @Override
     public void onPreviewStopped() {
         if( MyDebug.LOG )
             Log.d(TAG, "onPreviewStopped");
-        getLivePhotoManager().stopBuffering();
+        // RenCam: nothing to do - Live Photo recording is started/stopped around the shutter press.
     }
 
     @Override
     public void onBeforeStillCapture() {
         if( MyDebug.LOG )
             Log.d(TAG, "onBeforeStillCapture");
-        if( main_activity.getPreview().isVideo() )
-            return;
-        getLivePhotoManager().applyFlashForStillCapture(main_activity.getPreview().getCameraController());
+        // RenCam: the flash for a Live Photo is handled by LivePhotoManager when it starts recording.
+    }
+
+    @Override
+    public boolean startLivePhotoCapture() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "startLivePhotoCapture");
+        // Only in photo mode (not while recording video, and not for the video snapshot feature).
+        if( main_activity.getPreview().isVideo() ) {
+            return false;
+        }
+        return getLivePhotoManager().captureLivePhoto();
     }
 
     @Override
@@ -3558,14 +3631,6 @@ public class MyApplicationInterface extends BasicApplicationInterface {
 
         List<byte []> images = new ArrayList<>();
         images.add(data);
-
-        // RenCam: notify the Live Photo manager that the shutter has fired, so it can mark the
-        // moment within the buffered video and (later) package the Motion Photo.
-        getLivePhotoManager().onShutter();
-
-        // RenCam: the flash burst for the still has now fired - restore the user's original flash
-        // mode so the on-screen setting (and the next preview) are unaffected.
-        getLivePhotoManager().restoreFlashAfterStillCapture(main_activity.getPreview().getCameraController());
 
         boolean success = saveImage(false, images, current_date);
 

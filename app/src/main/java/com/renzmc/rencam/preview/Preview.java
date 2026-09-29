@@ -5718,7 +5718,15 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             return;
         }
 
-        // RenCam: apply the Live Photo flash behaviour (momentary burst, never a continuous torch)
+        // RenCam: Live Photo - when enabled, record a short video instead of taking a plain still,
+        // then convert the video into a Motion Photo (see LivePhotoManager). This is done before the
+        // normal still capture so it works on every device (and on the front camera too).
+        if( applicationInterface.startLivePhotoCapture() ) {
+            if( MyDebug.LOG )
+                Log.d(TAG, "takePicture: started Live Photo capture");
+            return;
+        }
+
         applicationInterface.onBeforeStillCapture();
         takePhoto(false, continuous_fast_burst);
         if( MyDebug.LOG )
@@ -5888,16 +5896,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         catch(Exception e) {
             e.printStackTrace();
         }
-        // restore the normal preview session
-        try {
-            if( camera_controller != null ) {
-                camera_controller.reconnect();
-                this.setPreviewPaused(false);
-            }
-        }
-        catch(Exception e) {
-            Log.e(TAG, "failed to reconnect camera after live photo buffer", e);
-        }
+        // Restore the normal preview session (reconnect the camera and restart the preview), using
+        // the same proven path as when a normal video recording is stopped.
+        reconnectCamera(false);
         return file;
     }
 
@@ -5906,22 +5907,21 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         return live_photo_recorder != null;
     }
 
-    /** RenCam: pins the flash burst for the Live Photo still so that the startup-autofocus flash
-     *  restore (see {@link #ensureFlashCorrect()}) cannot switch us back to a non-flash mode before
-     *  the still is captured. This guarantees the embedded key photo is the flash-illuminated frame. */
-    public void pinFlashForLivePhotoStill() {
-        if( set_flash_value_after_autofocus.length() > 0 ) {
-            if( MyDebug.LOG )
-                Log.d(TAG, "pinFlashForLivePhotoStill");
-            set_flash_value_after_autofocus = "flash_on";
-        }
+    /** RenCam Live Photo: called when a Live Photo recording starts, to update the preview state
+     *  (hides the GUI and shows the "taking photo" indicator for the duration of the clip). */
+    public void onLivePhotoCaptureStarted() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "onLivePhotoCaptureStarted");
+        applicationInterface.cameraInOperation(true, false);
     }
 
-    /** RenCam: releases the pin applied by {@link #pinFlashForLivePhotoStill()}. */
-    public void unpinFlashForLivePhotoStill() {
-        if( "flash_on".equals(set_flash_value_after_autofocus) ) {
-            set_flash_value_after_autofocus = "";
-        }
+    /** RenCam Live Photo: called when a Live Photo recording has finished, to restore the normal
+     *  preview state (so the shutter button becomes usable again). */
+    public void onLivePhotoCaptureFinished() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "onLivePhotoCaptureFinished");
+        this.phase = PHASE_NORMAL;
+        applicationInterface.cameraInOperation(false, false);
     }
 
     private void startVideoRecording(final boolean max_filesize_restart) {

@@ -36,8 +36,10 @@ import android.graphics.Path;
 import android.graphics.Point;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.RadialGradient;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.location.Location;
 import android.net.Uri;
@@ -528,6 +530,12 @@ public class DrawPreview {
         if( MyDebug.LOG )
             Log.d(TAG, "turnFrontScreenFlashOn");
         front_screen_flash = true;
+    }
+
+    public void turnFrontScreenFlashOff() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "turnFrontScreenFlashOff");
+        front_screen_flash = false;
     }
 
     public void onCaptureStarted() {
@@ -2809,8 +2817,31 @@ public class DrawPreview {
         }
 
         if( camera_controller!= null && front_screen_flash ) {
+            // Front screen "flash": there is no LED on the front camera, so we brighten the screen
+            // to (near) maximum and add a soft white glow around the edges so it looks like a real
+            // flash / ring light - and so light is thrown onto the subject from the sides too.
+            final int width = canvas.getWidth();
+            final int height = canvas.getHeight();
+
+            // 1) Base: brighten the whole screen to (near) full white.
             p.setColor(Color.WHITE);
-            canvas.drawRect(0.0f, 0.0f, canvas.getWidth(), canvas.getHeight(), p);
+            p.setAlpha(232); // very bright, but leave a tiny bit so the user can still see the preview
+            canvas.drawRect(0.0f, 0.0f, width, height, p);
+            p.setAlpha(255);
+
+            // 2) Edge glow: a radial gradient that is transparent in the centre and bright white at
+            // the edges, producing a white halo around the border.
+            float radius = (float)( Math.sqrt((double)width * width + (double)height * height) / 2.0 );
+            if( radius > 0.0f ) {
+                RadialGradient gradient = new RadialGradient(
+                        width / 2.0f, height / 2.0f, radius,
+                        new int[] { Color.TRANSPARENT, Color.argb(110, 255, 255, 255), Color.argb(255, 255, 255, 255) },
+                        new float[] { 0.0f, 0.55f, 1.0f },
+                        Shader.TileMode.CLAMP);
+                p.setShader(gradient);
+                canvas.drawRect(0.0f, 0.0f, width, height, p);
+                p.setShader(null);
+            }
         }
         else if( "flash_frontscreen_torch".equals(preview.getCurrentFlashValue()) ) { // getCurrentFlashValue() may return null
             p.setColor(Color.WHITE);

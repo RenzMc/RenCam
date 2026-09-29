@@ -205,6 +205,7 @@ public interface ApplicationInterface {
     void onPreviewStarted(); // called after the camera preview has started (RenCam: used to start the Live Photo buffer)
     void onPreviewStopped(); // called before the camera preview is stopped (RenCam: used to stop the Live Photo buffer)
     void onBeforeStillCapture(); // called just before a still photo is captured (RenCam: used to apply the Live Photo flash burst behaviour)
+    boolean startLivePhotoCapture(); // RenCam: called when the shutter is pressed in photo mode; if this returns true, the app has started recording a Live Photo video and the normal still capture should be skipped
     void onCameraError(); // called if the camera closes due to serious error.
     void onPhotoError(); // callback for failing to take a photo
     void onVideoInfo(int what, int extra); // callback for info when recording video (see MediaRecorder.OnInfoListener)

@@ -438,8 +438,15 @@ public final class LivePhotoHelper {
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
             retriever.setDataSource(context, videoUri);
-            return retriever.getFrameAtTime(timeMs * 1000L,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            // Prefer the exact frame at the requested time (OPTION_CLOSEST); fall back to the nearest
+            // sync/key frame if the exact frame cannot be decoded on this device.
+            Bitmap bitmap = retriever.getFrameAtTime(timeMs * 1000L,
+                    MediaMetadataRetriever.OPTION_CLOSEST);
+            if( bitmap == null ) {
+                bitmap = retriever.getFrameAtTime(timeMs * 1000L,
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            }
+            return bitmap;
         } catch (Exception e) {
             Log.e(TAG, "Error extracting frame at " + timeMs + " ms", e);
             return null;

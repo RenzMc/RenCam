@@ -2,6 +2,7 @@ package com.renzmc.rencam.livephoto;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -10,9 +11,11 @@ import android.util.Log;
 
 import com.renzmc.rencam.MyDebug;
 import com.renzmc.rencam.PreferenceKeys;
+import com.renzmc.rencam.R;
 import com.renzmc.rencam.cameracontroller.CameraController;
 import com.renzmc.rencam.preview.Preview;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -21,61 +24,52 @@ import java.util.Locale;
 /**
  * Orchestrates the RenCam "Live Photo" (Google Motion Photo) feature.
  *
- * <p>Design (as requested by the user, matching Apple/Google Live Photo semantics):
- * <ol>
- *   <li>While the camera is open in photo mode and Live Photo is enabled, a low-overhead
- *       video is <b>continuously buffered</b> to a temporary file (the "pre-roll").</li>
- *   <li>When the user presses the shutter we remember the exact timestamp, capture the
- *       high resolution still, and (per the flash behaviour setting) fire a <b>momentary
- *       flash burst</b> for the still. The flash is <b>never</b> left on as a continuous
- *       torch while the buffer is recording.</li>
- *   <li>Recording continues for the configured post-roll so we also capture the moment
- *       <i>after</i> the shutter.</li>
- *   <li>The buffered video is trimmed to <code>[shutter - preroll, shutter + postroll]</code>
- *       and packaged together with the still JPEG into a single Motion Photo file
- *       (JPEG with an embedded MP4 + XMP metadata), using {@link LivePhotoHelper}.</li>
- * </ol>
+ * <p><b>How it works (as requested by the user):</b> when the shutter is pressed in photo mode
+ * while Live Photo is enabled, instead of taking a plain still photo the app <b>records a short
+ * video</b>. Once the clip has finished recording, a single cover frame is extracted from the video
+ * and saved as a normal photo through the usual pipeline (MediaStore / SAF / file). Finally the
+ * recorded MP4 is packaged together with the saved cover frame into a single Motion Photo
+ * (JPEG with an embedded MP4 + XMP metadata) using {@link LivePhotoHelper}.</p>
  *
- * <p>This class is intentionally decoupled from the camera plumbing: the actual recording
- * primitive lives in {@link Preview} ({@code startLivePhotoBuffer()} /
- * {@code stopLivePhotoBuffer()}), and the still-image save is signalled by
- * {@code MyApplicationInterface.addLastImage(File, boolean)}.
+ * <p>This "record a video, then convert it" approach is deliberately chosen because it works on
+ * <b>every</b> device that can record video - it does not depend on the device supporting the
+ * simultaneous photo+video capture that a "buffer the preview" implementation would need. It also
+ * makes the feature work identically on the front camera.</p>
+ *
+ * <p>The class is intentionally decoupled from the camera plumbing: the actual recording primitive
+ * lives in {@link Preview} ({@code startLivePhotoBuffer()} / {@code stopLivePhotoBuffer()}), the
+ * cover image is saved through the {@link LivePhotoHost} callbacks, and the saved still is signalled
+ * back via {@code MyApplicationInterface.addLastImage(...)}.</p>
  *
  * @author RenzMc
  */
 public class LivePhotoManager {
     private static final String TAG = "LivePhotoManager";
 
-    /** Minimum Android version that reliably supports MediaMuxer/MediaExtractor based trimming. */
+    /** Minimum Android version that reliably supports MediaMuxer/MediaExtractor based processing. */
     private static final int MIN_SDK = Build.VERSION_CODES.JELLY_BEAN_MR2; // 18
 
     private final Context context;
     private final SharedPreferences sharedPreferences;
     private Preview preview;
+    private LivePhotoHost host;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
-    /** True while a background video buffer is being recorded. */
-    private volatile boolean buffering;
-    /** Wall-clock time (ms) at which the current buffer started recording. */
-    private long buffer_start_time;
-    /** Wall-clock time (ms) at which the shutter fired, relative to the running buffer. */
-    private long shutter_time;
-    /** Set once the shutter has fired and we are waiting for the post-roll to elapse. */
-    private volatile boolean waiting_for_postroll;
-    /** The still photo file, once it has been saved by {@code ImageSaver}. */
-    private File pending_still;
-    /** The still photo content uri (MediaStore / SAF), once it has been saved by {@code ImageSaver}. */
-    private Uri pending_still_uri;
+    /** True while we are recording the Live Photo video (between the shutter press and the end of the clip). */
+    private volatile boolean capturing;
+    /** True once the video has been recorded and we are waiting for the cover still to be saved. */
+    private volatile boolean waiting_for_cover;
+    /** The recorded video file that is waiting to be packaged into the saved cover still. */
+    private File pending_video_file;
+    /** The presentation timestamp (microseconds) of the cover frame within the recorded video. */
+    private long pending_presentation_us;
 
-    // State used when the post-roll elapses before the still has finished saving.
-    private volatile boolean waiting_for_still;
-    private File stopped_video_file;
-    private Uri stopped_still_uri;
-    private long stopped_shutter_offset;
-    private int stopped_preroll;
-    private int stopped_postroll;
+    private Runnable stop_runnable;
 
-    private Runnable postroll_runnable;
+    /** The flash value that was active before we forced a torch, so we can restore it afterwards. */
+    private String flash_value_before_capture = null;
+    /** True if we turned on the front-screen flash (bright white screen) for the current capture. */
+    private boolean used_screen_flash = false;
 
     public LivePhotoManager(Context context, SharedPreferences sharedPreferences, Preview preview) {
         this.context = context;
@@ -86,6 +80,11 @@ public class LivePhotoManager {
     /** Updates the Preview reference (the Preview may not exist when this manager is first created). */
     public void setPreview(Preview preview) {
         this.preview = preview;
+    }
+
+    /** Sets the host used to save the cover frame and control the front-screen flash. */
+    public void setHost(LivePhotoHost host) {
+        this.host = host;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -102,33 +101,48 @@ public class LivePhotoManager {
         return Build.VERSION.SDK_INT >= MIN_SDK;
     }
 
+    /** Whether Live Photo capture should currently be used (enabled and supported). */
+    public boolean isActive() {
+        return isEnabled() && isSupported();
+    }
+
     /** Total Live Photo length in milliseconds (video duration setting, default 3s). */
     public int getDurationMs() {
         return parseSecondsToMs(sharedPreferences.getString(PreferenceKeys.LivePhotoDurationPreferenceKey, "3"), 3000);
     }
 
-    /** Pre-roll (before shutter) in milliseconds, default 1500ms. */
-    public int getPrerollMs() {
-        String value = sharedPreferences.getString(PreferenceKeys.LivePhotoPrerollPreferenceKey, "1500");
+    /**
+     * The offset (in milliseconds) into the recorded clip at which the cover frame is taken.
+     *
+     * <p>Because we start recording at the moment the shutter is pressed, the cover frame is taken
+     * slightly into the clip (so the camera's exposure/focus has settled and there is some motion
+     * before and after the still). This reuses the "duration before shutter" preference, clamped so
+     * that it always stays inside the clip.</p>
+     */
+    public int getCoverOffsetMs() {
+        int duration = getDurationMs();
+        int offset;
         try {
-            return Integer.parseInt(value);
+            offset = Integer.parseInt(sharedPreferences.getString(PreferenceKeys.LivePhotoPrerollPreferenceKey, "1500"));
         }
         catch(NumberFormatException e) {
-            return 1500;
+            offset = 1500;
         }
+        if( offset < 0 ) {
+            offset = 0;
+        }
+        if( offset > duration - 200 ) {
+            offset = Math.max(0, duration - 200);
+        }
+        return offset;
     }
 
-    /** Post-roll (after shutter) in milliseconds = duration - preroll (clamped to >= 0). */
-    public int getPostrollMs() {
-        return Math.max(0, getDurationMs() - getPrerollMs());
-    }
-
-    /** Flash behaviour: "burst" (recommended), "torch" or "off". */
+    /** Flash behaviour: "on" (use the light) or "off". */
     public String getFlashBehavior() {
-        return sharedPreferences.getString(PreferenceKeys.LivePhotoFlashBehaviorPreferenceKey, "burst");
+        return sharedPreferences.getString(PreferenceKeys.LivePhotoFlashBehaviorPreferenceKey, "on");
     }
 
-    /** Whether the buffered video should record audio. */
+    /** Whether the recorded video should record audio. */
     public boolean getRecordAudio() {
         return sharedPreferences.getBoolean(PreferenceKeys.LivePhotoAudioPreferenceKey, false);
     }
@@ -143,325 +157,260 @@ public class LivePhotoManager {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Buffer lifecycle
+    // Capture lifecycle
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * Starts continuously buffering video. Safe to call repeatedly; does nothing if already
-     * buffering or if the feature is disabled/unsupported.
+     * Starts a Live Photo capture: begins recording a short video. Must be called on the UI thread.
+     *
+     * @return true if recording was started (the caller should then NOT take a normal still photo).
      */
-    public synchronized void startBuffering() {
+    public synchronized boolean captureLivePhoto() {
         if( MyDebug.LOG )
-            Log.d(TAG, "startBuffering");
-        if( !isEnabled() || !isSupported() ) {
+            Log.d(TAG, "captureLivePhoto");
+        if( !isActive() ) {
             if( MyDebug.LOG )
-                Log.d(TAG, "not enabled or not supported");
-            return;
+                Log.d(TAG, "live photo not active");
+            return false;
         }
-        if( buffering ) {
+        if( capturing || waiting_for_cover ) {
             if( MyDebug.LOG )
-                Log.d(TAG, "already buffering");
-            return;
+                Log.d(TAG, "live photo already in progress");
+            return false;
         }
         if( preview == null || preview.getCameraController() == null ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "camera not open");
-            return;
+            return false;
         }
         if( preview.isVideo() || !preview.isPreviewStarted() ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "not in photo preview mode");
-            return;
+            return false;
         }
-        if( !preview.supportsPhotoVideoRecording() ) {
-            // Without the ability to capture a still while the buffer is recording, a Live Photo
-            // cannot be produced - fall back to normal photo capture (no buffering).
-            if( MyDebug.LOG )
-                Log.d(TAG, "device does not support photo-video recording");
-            return;
-        }
-        File buffer_file = createBufferFile();
-        if( buffer_file == null ) {
-            Log.e(TAG, "failed to create live photo buffer file");
-            return;
-        }
-        boolean started = preview.startLivePhotoBuffer(buffer_file, getRecordAudio());
-        if( started ) {
-            buffering = true;
-            buffer_start_time = System.currentTimeMillis();
-            if( MyDebug.LOG )
-                Log.d(TAG, "live photo buffer started: " + buffer_file.getAbsolutePath());
-        }
-        else {
-            Log.e(TAG, "failed to start live photo buffer");
-        }
-    }
 
-    /** Stops the buffer (if running) and returns the recorded file, or null. */
-    public synchronized File stopBuffering() {
-        if( MyDebug.LOG )
-            Log.d(TAG, "stopBuffering");
-        cancelPostroll();
-        if( !buffering ) {
-            return null;
+        File video_file = createBufferFile();
+        if( video_file == null ) {
+            Log.e(TAG, "failed to create live photo file");
+            return false;
         }
-        buffering = false;
-        File file = preview.stopLivePhotoBuffer();
-        if( MyDebug.LOG )
-            Log.d(TAG, "buffer stopped: " + (file != null ? file.getAbsolutePath() : "null"));
-        return file;
-    }
 
-    /** Aborts any in-flight capture and discards the buffer. */
-    public synchronized void abort() {
-        if( MyDebug.LOG )
-            Log.d(TAG, "abort");
-        cancelPostroll();
-        waiting_for_postroll = false;
-        waiting_for_still = false;
-        pending_still = null;
-        pending_still_uri = null;
-        stopped_still_uri = null;
-        if( stopped_video_file != null ) {
-            if( stopped_video_file.exists() ) {
-                //noinspection ResultOfMethodCallIgnored
-                stopped_video_file.delete();
-            }
-            stopped_video_file = null;
+        // Flash: the front camera has no LED, so we light the scene with a bright white screen;
+        // the back camera uses its LED as a continuous torch for the duration of the clip.
+        boolean front = host != null && host.isFrontFacing();
+        applyFlashForCapture(front);
+
+        boolean started = preview.startLivePhotoBuffer(video_file, getRecordAudio());
+        if( !started ) {
+            Log.e(TAG, "failed to start live photo recording");
+            restoreFlashAfterCapture();
+            deleteQuietly(video_file);
+            return false;
         }
-        if( buffering ) {
-            buffering = false;
-            File file = preview.stopLivePhotoBuffer();
-            if( file != null && file.exists() ) {
-                //noinspection ResultOfMethodCallIgnored
-                file.delete();
-            }
+
+        capturing = true;
+        pending_video_file = video_file;
+        pending_presentation_us = 0L;
+        waiting_for_cover = false;
+
+        // Update the preview state: hide the GUI and show the "taking photo" indicator for the
+        // duration of the clip (the shutter was already put into PHASE_TAKING_PHOTO by takePicture()).
+        if( preview != null ) {
+            preview.onLivePhotoCaptureStarted();
         }
-    }
 
-    // ---------------------------------------------------------------------------------------------
-    // Shutter handling
-    // ---------------------------------------------------------------------------------------------
-
-    /**
-     * Called the moment the shutter fires (before/at still capture). Records the shutter
-     * timestamp relative to the running buffer and schedules the post-roll stop.
-     */
-    public synchronized void onShutter() {
-        if( MyDebug.LOG )
-            Log.d(TAG, "onShutter");
-        if( !isEnabled() || !buffering ) {
-            return;
+        if( host != null ) {
+            host.showToast(R.string.live_photo_hold_steady);
         }
-        shutter_time = System.currentTimeMillis() - buffer_start_time;
-        if( MyDebug.LOG )
-            Log.d(TAG, "shutter offset within buffer: " + shutter_time + "ms");
-        waiting_for_postroll = true;
-        pending_still = null;
-        pending_still_uri = null;
 
-        // Schedule the stop after the post-roll has elapsed.
-        int postroll = getPostrollMs();
+        int duration = getDurationMs();
         if( MyDebug.LOG )
-            Log.d(TAG, "scheduling post-roll stop in " + postroll + "ms");
-        postroll_runnable = new Runnable() {
+            Log.d(TAG, "recording live photo for " + duration + "ms");
+        stop_runnable = new Runnable() {
             @Override
             public void run() {
-                synchronized( LivePhotoManager.this ) {
-                    if( !waiting_for_postroll ) {
-                        return;
-                    }
-                    waiting_for_postroll = false;
-                }
-                onPostrollElapsed();
+                onCaptureDurationElapsed();
             }
         };
-        handler.postDelayed(postroll_runnable, postroll);
+        handler.postDelayed(stop_runnable, duration);
+        return true;
+    }
+
+    /** Called once the configured clip duration has elapsed: stop recording and extract the cover frame. */
+    private synchronized void onCaptureDurationElapsed() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "onCaptureDurationElapsed");
+        stop_runnable = null;
+        if( !capturing ) {
+            return;
+        }
+        capturing = false;
+
+        final File video_file = preview != null ? preview.stopLivePhotoBuffer() : null;
+
+        // Recording has finished - turn the flash off again and restore the normal preview state
+        // (so the shutter button becomes usable again while the cover frame is extracted/saved).
+        restoreFlashAfterCapture();
+        if( preview != null ) {
+            preview.onLivePhotoCaptureFinished();
+        }
+
+        if( video_file == null || !video_file.exists() || video_file.length() < 100 ) {
+            Log.e(TAG, "live photo recording produced no usable video");
+            deleteQuietly(video_file);
+            return;
+        }
+
+        final int offset_ms = getCoverOffsetMs();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final byte[] cover = extractCoverJpeg(video_file, offset_ms);
+                if( cover == null ) {
+                    Log.e(TAG, "failed to extract cover frame from live photo video");
+                    deleteQuietly(video_file);
+                    return;
+                }
+                // Register the pending video *before* saving, so that when the still is saved
+                // (possibly synchronously) the onStillSaved() callback finds it.
+                synchronized( LivePhotoManager.this ) {
+                    pending_video_file = video_file;
+                    pending_presentation_us = offset_ms * 1000L;
+                    waiting_for_cover = true;
+                }
+                // Save the cover on the main thread, as saveImage() touches UI-related state.
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean ok = host != null && host.saveLivePhotoCover(cover, new Date());
+                        if( !ok ) {
+                            Log.e(TAG, "failed to save live photo cover frame");
+                            synchronized( LivePhotoManager.this ) {
+                                waiting_for_cover = false;
+                                pending_video_file = null;
+                            }
+                            deleteQuietly(video_file);
+                        }
+                    }
+                });
+            }
+        }, "LivePhotoCover").start();
+    }
+
+    /** Extracts a single frame from the recorded video and encodes it as JPEG bytes. */
+    private byte[] extractCoverJpeg(File video_file, int offset_ms) {
+        Bitmap bitmap = LivePhotoHelper.extractVideoFrame(context, Uri.fromFile(video_file), offset_ms);
+        if( bitmap == null ) {
+            return null;
+        }
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, bos);
+            return bos.toByteArray();
+        }
+        finally {
+            bitmap.recycle();
+        }
     }
 
     /**
-     * Called once the still photo has been saved to disk, so we know which file to use as the
-     * Motion Photo cover image.
+     * Called once the cover still has been saved to disk, so we know which file to package the video
+     * into (turning the plain JPEG into a Motion Photo).
      */
     public synchronized void onStillSaved(File stillFile) {
         if( MyDebug.LOG )
-            Log.d(TAG, "onStillSaved: " + (stillFile != null ? stillFile.getAbsolutePath() : "null"));
-        if( !isEnabled() ) {
+            Log.d(TAG, "onStillSaved(file): " + (stillFile != null ? stillFile.getAbsolutePath() : "null"));
+        if( !waiting_for_cover ) {
             return;
         }
-        if( waiting_for_still ) {
-            // The post-roll already elapsed and we were waiting for the still to finish saving.
-            waiting_for_still = false;
-            File video_file = stopped_video_file;
-            long shutter_offset = stopped_shutter_offset;
-            int preroll = stopped_preroll;
-            int postroll = stopped_postroll;
-            stopped_video_file = null;
-            stopped_still_uri = null;
-            startPackaging(video_file, stillFile, null, shutter_offset, preroll, postroll);
+        waiting_for_cover = false;
+        final File video_file = pending_video_file;
+        final long presentation_us = pending_presentation_us;
+        pending_video_file = null;
+        if( video_file == null || stillFile == null || !stillFile.exists() ) {
+            deleteQuietly(video_file);
+            return;
         }
-        else {
-            pending_still = stillFile;
-            pending_still_uri = null;
-        }
+        startPackaging(stillFile, null, video_file, presentation_us);
     }
 
     /**
-     * Called once the still photo has been saved to a content {@link Uri} (MediaStore or SAF),
-     * so we know which file to use as the Motion Photo cover image.
-     *
-     * <p>This is the path used on Android 10+ where photos are saved via MediaStore by default,
-     * and whenever the user has enabled the Storage Access Framework. Without this the Live Photo
-     * manager would never be notified of the saved still and the photo would remain a plain JPEG.</p>
+     * Called once the cover still has been saved to a content {@link Uri} (MediaStore or SAF), so we
+     * know which file to package the video into.
      */
     public synchronized void onStillSaved(Uri stillUri) {
         if( MyDebug.LOG )
             Log.d(TAG, "onStillSaved(uri): " + stillUri);
-        if( !isEnabled() ) {
+        if( !waiting_for_cover ) {
             return;
         }
-        if( waiting_for_still ) {
-            waiting_for_still = false;
-            File video_file = stopped_video_file;
-            long shutter_offset = stopped_shutter_offset;
-            int preroll = stopped_preroll;
-            int postroll = stopped_postroll;
-            stopped_video_file = null;
-            stopped_still_uri = null;
-            startPackaging(video_file, null, stillUri, shutter_offset, preroll, postroll);
+        waiting_for_cover = false;
+        final File video_file = pending_video_file;
+        final long presentation_us = pending_presentation_us;
+        pending_video_file = null;
+        if( video_file == null || stillUri == null ) {
+            deleteQuietly(video_file);
+            return;
         }
-        else {
-            pending_still = null;
-            pending_still_uri = stillUri;
-        }
+        startPackaging(null, stillUri, video_file, presentation_us);
     }
 
-    private void cancelPostroll() {
-        if( postroll_runnable != null ) {
-            handler.removeCallbacks(postroll_runnable);
-            postroll_runnable = null;
+    /** Aborts any in-flight capture and discards the recorded video. */
+    public synchronized void abort() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "abort");
+        boolean was_capturing = capturing;
+        if( stop_runnable != null ) {
+            handler.removeCallbacks(stop_runnable);
+            stop_runnable = null;
+        }
+        capturing = false;
+        waiting_for_cover = false;
+        pending_video_file = null;
+        restoreFlashAfterCapture();
+        if( preview != null && preview.isLivePhotoBuffering() ) {
+            File file = preview.stopLivePhotoBuffer();
+            deleteQuietly(file);
+        }
+        // Restore the normal preview state if we had been recording (the shutter was put into
+        // PHASE_TAKING_PHOTO by takePicture()).
+        if( was_capturing && preview != null ) {
+            preview.onLivePhotoCaptureFinished();
         }
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Finalize: clip + package
+    // Finalize: package the video into the saved still
     // ---------------------------------------------------------------------------------------------
 
-    /**
-     * Called when the post-roll has elapsed: stops the buffer and either packages immediately
-     * (if the still is already saved) or waits for the still to arrive.
-     */
-    private synchronized void onPostrollElapsed() {
-        final File video_file = stopBuffering();
-        final File still_file = pending_still;
-        final Uri still_uri = pending_still_uri;
-        final long shutter_offset = shutter_time;
-        final int preroll = getPrerollMs();
-        final int postroll = getPostrollMs();
-        pending_still = null;
-        pending_still_uri = null;
-
-        if( video_file == null ) {
-            if( MyDebug.LOG )
-                Log.d(TAG, "cannot finalize live photo: no video");
-            return;
-        }
-
-        if( still_file != null && still_file.exists() ) {
-            startPackaging(video_file, still_file, null, shutter_offset, preroll, postroll);
-        }
-        else if( still_uri != null ) {
-            startPackaging(video_file, null, still_uri, shutter_offset, preroll, postroll);
-        }
-        else {
-            // The still hasn't been saved yet - keep the video and wait for onStillSaved().
-            if( MyDebug.LOG )
-                Log.d(TAG, "still not saved yet, waiting for it before packaging");
-            stopped_video_file = video_file;
-            stopped_still_uri = null;
-            stopped_shutter_offset = shutter_offset;
-            stopped_preroll = preroll;
-            stopped_postroll = postroll;
-            waiting_for_still = true;
-        }
-    }
-
-    /** Runs the (potentially slow) trimming/packaging on a background thread. */
-    private void startPackaging(final File video_file, final File still_file, final Uri still_uri,
-                                final long shutter_offset, final int preroll, final int postroll) {
-        boolean have_still = (still_file != null && still_file.exists()) || still_uri != null;
-        if( video_file == null || !have_still ) {
-            if( MyDebug.LOG )
-                Log.d(TAG, "cannot package live photo: video=" + video_file + " still=" + still_file + " uri=" + still_uri);
-            if( video_file != null && video_file.exists() ) {
-                //noinspection ResultOfMethodCallIgnored
-                video_file.delete();
-            }
-            return;
-        }
-
+    /** Runs the (potentially slow) packaging on a background thread. */
+    private void startPackaging(final File still_file, final Uri still_uri, final File video_file,
+                                final long presentation_us) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    packageLivePhoto(video_file, still_file, still_uri, shutter_offset, preroll, postroll);
+                    if( still_file != null ) {
+                        packageIntoFile(still_file, video_file, presentation_us);
+                    }
+                    else if( still_uri != null ) {
+                        packageIntoUri(still_uri, video_file, presentation_us);
+                    }
                 }
                 catch(Exception e) {
                     Log.e(TAG, "failed to package live photo", e);
                 }
                 finally {
-                    if( video_file.exists() ) {
-                        //noinspection ResultOfMethodCallIgnored
-                        video_file.delete();
-                    }
+                    deleteQuietly(video_file);
                 }
             }
         }, "LivePhotoPackager").start();
     }
 
-    private void packageLivePhoto(File video_file, File still_file, Uri still_uri, long shutter_offset,
-                                  int preroll, int postroll) {
-        if( MyDebug.LOG )
-            Log.d(TAG, "packageLivePhoto: shutter_offset=" + shutter_offset + " preroll=" + preroll + " postroll=" + postroll);
-
-        long clip_start = Math.max(0, shutter_offset - preroll);
-        long clip_end = shutter_offset + postroll;
-
-        File trimmed = new File(video_file.getParentFile(), video_file.getName().replace(".mp4", "_trim.mp4"));
-        boolean trimmed_ok = LivePhotoHelper.trimVideo(context, Uri.fromFile(video_file), trimmed, clip_start, clip_end);
-        File motion_source = trimmed_ok && trimmed.exists() ? trimmed : video_file;
-
-        // The still corresponds to (shutter_offset - clip_start) ms into the trimmed clip.
-        long presentation_us = Math.max(0, shutter_offset - clip_start) * 1000L;
-
-        if( still_file != null && still_file.exists() ) {
-            packageIntoFile(still_file, motion_source, presentation_us);
-        }
-        else if( still_uri != null ) {
-            packageIntoUri(still_uri, motion_source, presentation_us);
-        }
-        else {
-            Log.e(TAG, "no still image to package");
-        }
-
-        if( trimmed.exists() ) {
-            //noinspection ResultOfMethodCallIgnored
-            trimmed.delete();
-        }
-
-        // Restart buffering so the next shot is also a Live Photo.
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                startBuffering();
-            }
-        });
-    }
-
     /** Packages the still (a plain file) in place, replacing it with the Motion Photo. */
-    private void packageIntoFile(File still_file, File motion_source, long presentation_us) {
+    private void packageIntoFile(File still_file, File video_file, long presentation_us) {
         File output = new File(still_file.getParentFile(), still_file.getName() + ".live.tmp");
-        boolean ok = LivePhotoHelper.packageMotionPhoto(still_file, motion_source, output, presentation_us);
+        boolean ok = LivePhotoHelper.packageMotionPhoto(still_file, video_file, output, presentation_us);
         if( ok && output.exists() ) {
             // Replace the plain JPEG with the Motion Photo (JPEG + embedded MP4 + XMP).
             if( still_file.delete() ) {
@@ -482,8 +431,7 @@ public class LivePhotoManager {
             Log.e(TAG, "failed to package motion photo");
         }
         if( !ok && output.exists() ) {
-            //noinspection ResultOfMethodCallIgnored
-            output.delete();
+            deleteQuietly(output);
         }
     }
 
@@ -491,13 +439,13 @@ public class LivePhotoManager {
      * Packages the still (a content {@link Uri} from MediaStore/SAF) and writes the Motion Photo
      * back over the same Uri, replacing the plain JPEG that was saved.
      */
-    private void packageIntoUri(Uri still_uri, File motion_source, long presentation_us) {
+    private void packageIntoUri(Uri still_uri, File video_file, long presentation_us) {
         File output = null;
         try {
             byte[] coverBytes = LivePhotoHelper.readUri(context, still_uri);
             output = new File(context.getCacheDir(),
                     "rencam_live_pkg_" + System.currentTimeMillis() + ".jpg");
-            boolean ok = LivePhotoHelper.packageMotionPhoto(coverBytes, motion_source, output, presentation_us);
+            boolean ok = LivePhotoHelper.packageMotionPhoto(coverBytes, video_file, output, presentation_us);
             if( ok && output.exists() ) {
                 long new_size = output.length();
                 if( LivePhotoHelper.writeFileToUri(context, output, still_uri) ) {
@@ -518,8 +466,7 @@ public class LivePhotoManager {
         }
         finally {
             if( output != null && output.exists() ) {
-                //noinspection ResultOfMethodCallIgnored
-                output.delete();
+                deleteQuietly(output);
             }
         }
     }
@@ -550,7 +497,7 @@ public class LivePhotoManager {
             String path = uri.getPath();
             if( path != null && path.startsWith("/") ) {
                 android.media.MediaScannerConnection.scanFile(context,
-                        new String[]{ path }, new String[]{ "image/jpeg" }, null);
+                        new String[]{ path }, new String[] { "image/jpeg" }, null);
             }
         }
         catch(Exception e) {
@@ -562,79 +509,74 @@ public class LivePhotoManager {
     // Flash handling
     // ---------------------------------------------------------------------------------------------
 
-    /** The flash value that was active before we forced a burst, so we can restore it afterwards. */
-    private String flash_value_before_burst = null;
-
     /**
-     * Ensures the flash is configured correctly for the upcoming still capture.
+     * Configures the flash for the upcoming Live Photo recording.
      *
-     * <p>Per the requested behaviour, the flash must be a <b>momentary burst</b> fired only at the
-     * instant the still is captured - it must <b>not</b> be a continuous torch running for the whole
-     * duration of the buffered video.
-     *
-     * <p>To make the embedded key photo look like an iPhone Live Photo taken with flash, we want the
-     * still that ends up inside the Motion Photo to be the <b>flash-illuminated</b> frame. We therefore
-     * force the flash into a definite still-flash mode ({@code flash_on}) for the burst behaviour,
-     * remembering the user's previous mode so it can be restored after the shot. If the flash was
-     * already {@code on}/{@code auto}/{@code red-eye} we keep the same LED behaviour but guarantee it
-     * fires (rather than possibly not firing in a bright scene under {@code auto}).
+     * <p>For the front camera we light the scene with a bright white screen (there is no LED on
+     * front cameras). For the back camera we keep the LED on as a continuous torch for the whole
+     * clip (so the recorded video - and therefore the extracted cover frame - is illuminated),
+     * remembering the user's previous flash mode so it can be restored afterwards.</p>
      */
-    public void applyFlashForStillCapture(CameraController controller) {
-        if( controller == null || !isEnabled() ) {
+    private void applyFlashForCapture(boolean front) {
+        String behavior = getFlashBehavior();
+        CameraController controller = preview != null ? preview.getCameraController() : null;
+        String current = controller != null ? controller.getFlashValue() : null; // "" if flash not supported
+        boolean has_led = current != null && current.length() > 0;
+
+        if( "off".equals(behavior) ) {
+            // User asked not to use any flash for Live Photo.
+            if( !front && controller != null && has_led ) {
+                controller.setFlashValue("flash_off");
+            }
             return;
         }
-        String behavior = getFlashBehavior();
-        if( MyDebug.LOG )
-            Log.d(TAG, "applyFlashForStillCapture, behavior: " + behavior);
-        String current = controller.getFlashValue(); // "" if flash not supported
-        if( "off".equals(behavior) ) {
-            controller.setFlashValue("flash_off");
-        }
-        else if( "torch".equals(behavior) ) {
-            // Non-recommended: continuous torch for the whole clip.
-            controller.setFlashValue("flash_torch");
-        }
-        else {
-            // Recommended "burst": the still must be the flash-illuminated frame.
-            if( current != null && current.length() > 0 ) {
-                // Flash is available on this camera. Remember the user's mode and force a definite
-                // momentary burst for the still (never a continuous torch).
-                if( flash_value_before_burst == null ) {
-                    flash_value_before_burst = current;
-                }
-                if( !"flash_on".equals(current) ) {
-                    controller.setFlashValue("flash_on");
-                }
-                // Make sure the startup-autofocus flash restore can't override the burst.
-                if( preview != null ) {
-                    preview.pinFlashForLivePhotoStill();
-                }
+
+        if( front && !has_led ) {
+            // The front camera has no LED flash, so we use the "front screen flash": the screen is
+            // lit up bright white (with a glow around the edges) to illuminate the subject while the
+            // video is recorded. This is the standard technique for front-camera flash.
+            if( host != null ) {
+                if( MyDebug.LOG )
+                    Log.d(TAG, "turning on front screen flash for live photo");
+                host.turnFrontScreenFlashOn();
+                used_screen_flash = true;
             }
+            return;
+        }
+
+        // Use the LED as a continuous torch for the whole clip (front LED if the device has one,
+        // otherwise the back LED), so the recorded video - and the extracted cover frame - is lit.
+        if( controller != null && has_led ) {
+            if( flash_value_before_capture == null ) {
+                flash_value_before_capture = current;
+            }
+            if( MyDebug.LOG )
+                Log.d(TAG, "turning on LED torch for live photo");
+            controller.setFlashValue("flash_torch");
         }
     }
 
     /**
-     * Restores the flash mode the user had before we forced the still-capture burst. Called once the
-     * still has been captured/saved so the on-screen flash setting and the next preview are unaffected.
+     * Restores the flash mode the user had before we forced a torch, and turns off the front-screen
+     * flash. Called once the recording has finished.
      */
-    public void restoreFlashAfterStillCapture(CameraController controller) {
-        if( controller == null ) {
-            return;
+    private void restoreFlashAfterCapture() {
+        if( used_screen_flash && host != null ) {
+            host.turnFrontScreenFlashOff();
+            used_screen_flash = false;
         }
-        if( flash_value_before_burst != null ) {
+        CameraController controller = preview != null ? preview.getCameraController() : null;
+        if( controller != null && flash_value_before_capture != null ) {
             if( MyDebug.LOG )
-                Log.d(TAG, "restoreFlashAfterStillCapture, restoring: " + flash_value_before_burst);
+                Log.d(TAG, "restoreFlashAfterCapture, restoring: " + flash_value_before_capture);
             try {
-                controller.setFlashValue(flash_value_before_burst);
+                controller.setFlashValue(flash_value_before_capture);
             }
             catch(Exception e) {
                 Log.e(TAG, "failed to restore flash value", e);
             }
-            flash_value_before_burst = null;
         }
-        if( preview != null ) {
-            preview.unpinFlashForLivePhotoStill();
-        }
+        flash_value_before_capture = null;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -648,8 +590,15 @@ public class LivePhotoManager {
             return new File(dir, "rencam_live_" + timestamp + ".mp4");
         }
         catch(Exception e) {
-            Log.e(TAG, "failed to create buffer file", e);
+            Log.e(TAG, "failed to create live photo file", e);
             return null;
+        }
+    }
+
+    private void deleteQuietly(File file) {
+        if( file != null && file.exists() ) {
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
         }
     }
 }

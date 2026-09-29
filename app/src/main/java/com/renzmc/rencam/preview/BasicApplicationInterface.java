@@ -473,6 +473,11 @@ public abstract class BasicApplicationInterface implements ApplicationInterface 
     }
 
     @Override
+    public boolean startLivePhotoCapture() {
+        return false;
+    }
+
+    @Override
     public void onCameraError() {
 
     }

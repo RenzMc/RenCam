@@ -1426,7 +1426,7 @@
                 android:key="preference_live_photo_flash_behavior"
                 android:title="@string/preference_live_photo_flash_behavior"
                 android:summary="@string/preference_live_photo_flash_behavior_summary"
-                android:defaultValue="burst"
+                android:defaultValue="on"
                 android:entries="@array/live_photo_flash_entries"
                 android:entryValues="@array/live_photo_flash_values"
                 />
