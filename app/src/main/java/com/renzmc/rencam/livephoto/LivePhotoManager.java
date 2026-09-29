@@ -163,7 +163,10 @@ public class LivePhotoManager {
     /**
      * Starts a Live Photo capture: begins recording a short video. Must be called on the UI thread.
      *
-     * @return true if recording was started (the caller should then NOT take a normal still photo).
+     * @return true if the caller should SKIP the normal still capture - either because a Live Photo
+     *         recording was just started, or because a Live Photo is already in progress (in which
+     *         case the shutter press is swallowed so it can't be mistaken for a normal still that
+     *         would then get the wrong video packaged into it).
      */
     public synchronized boolean captureLivePhoto() {
         if( MyDebug.LOG )
@@ -175,8 +178,8 @@ public class LivePhotoManager {
         }
         if( capturing || waiting_for_cover ) {
             if( MyDebug.LOG )
-                Log.d(TAG, "live photo already in progress");
-            return false;
+                Log.d(TAG, "live photo already in progress - swallowing shutter press");
+            return true;
         }
         if( preview == null || preview.getCameraController() == null ) {
             if( MyDebug.LOG )
