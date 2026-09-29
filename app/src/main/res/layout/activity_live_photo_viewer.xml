@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RenCam Live Photo / media viewer: shows the still and plays the embedded video. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000">
+
+    <ImageView
+        android:id="@+id/viewer_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:contentDescription="@string/gallery_title" />
+
+    <VideoView
+        android:id="@+id/viewer_video"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <ProgressBar
+        android:id="@+id/viewer_progress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <!-- Live Photo play button -->
+    <ImageView
+        android:id="@+id/viewer_play"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="40dp"
+        android:background="@drawable/bg_gallery_play"
+        android:padding="14dp"
+        android:src="@android:drawable/ic_media_play"
+        android:contentDescription="@string/live_photo_play"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/viewer_live_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="16dp"
+        android:background="@drawable/bg_live_photo_badge"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp"
+        android:text="@string/live_photo_badge"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <ImageButton
+        android:id="@+id/viewer_close"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:background="?android:attr/selectableItemBackground"
+        android:src="@android:drawable/ic_menu_close_clear_cancel"
+        android:contentDescription="@string/gallery_close" />
+
+    <ImageButton
+        android:id="@+id/viewer_prev"
+        android:layout_width="48dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start|center_vertical"
+        android:background="?android:attr/selectableItemBackground"
+        android:src="@android:drawable/ic_media_previous"
+        android:contentDescription="@string/gallery_prev" />
+
+    <ImageButton
+        android:id="@+id/viewer_next"
+        android:layout_width="48dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end|center_vertical"
+        android:background="?android:attr/selectableItemBackground"
+        android:src="@android:drawable/ic_media_next"
+        android:contentDescription="@string/gallery_next" />
+
+</FrameLayout>

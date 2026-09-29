@@ -1,0 +1,787 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Terjemahan Bahasa Indonesia untuk RenCam
+    Indonesian translation for RenCam
+    Diterjemahkan oleh: RenzMc
+-->
+<resources>
+
+    <string name="app_name">RenCam</string>
+    <string name="action_settings">Pengaturan</string>
+    <string name="action_popup">Pengaturan popup</string>
+    <string name="intro_ok">OK (Pesan ini tidak akan muncul lagi)</string>
+
+    <string name="on">Aktif</string>
+    <string name="off">Nonaktif</string>
+
+    <string name="choose_save_location">Pilih lokasi penyimpanan:</string>
+    <string name="clear_folder_history">Hapus riwayat folder</string>
+    <string name="clear_folder_history_question">Hapus riwayat folder?</string>
+    <string name="choose_another_folder">Pilih folder lain</string>
+    <string name="changed_save_location">Lokasi penyimpanan diubah ke:</string>
+    <string name="stopped_recording_video">Berhenti merekam video</string>
+    <string name="repeats_to_go">ulangan tersisa</string>
+    <string name="failed_to_reconnect_camera">Gagal menyambung ulang ke kamera</string>
+    <string name="video_may_be_corrupted">Kesalahan, berkas video mungkin rusak</string>
+    <string name="not_supported">tidak didukung di perangkat Anda</string>
+    <string name="video_error_unknown">Kesalahan tidak diketahui, video dihentikan</string>
+    <string name="video_error_server_died">Server mati, video dihentikan</string>
+    <string name="video_max_duration">Video mencapai durasi maksimum</string>
+    <string name="video_max_filesize">Video mencapai ukuran berkas maksimum</string>
+    <string name="exposure_compensation">Kom pensasi eksposur</string>
+    <string name="fps">FPS</string>
+    <string name="focus_distance">Jarak fokus</string>
+    <string name="infinite">Tak hingga</string>
+    <string name="front_camera">Kamera Depan</string>
+    <string name="back_camera">Kamera Belakang</string>
+    <string name="photo">Foto</string>
+    <string name="video">Video</string>
+    <string name="exposure_locked">Eksposur terkunci</string>
+    <string name="exposure_unlocked">Eksposur tidak terkunci</string>
+    <string name="cancelled_timer">Timer dibatalkan</string>
+    <string name="cancelled_repeat_mode">Mode ulang dibatalkan</string>
+    <string name="started_timer">Timer dimulai</string>
+    <string name="failed_to_save_video">Gagal menyimpan berkas video</string>
+    <string name="failed_to_record_video">Gagal merekam video</string>
+    <string name="started_recording_video">Mulai merekam video</string>
+    <string name="sorry">Maaf</string>
+    <string name="failed_to_save_photo">Gagal menyimpan foto</string>
+    <string name="failed_to_save_photo_raw">Gagal menyimpan foto RAW</string>
+    <string name="failed_to_auto_stabilise">Gagal menyeimbangkan otomatis</string>
+    <string name="failed_to_start_camera_preview">Gagal memulai pratinjau kamera</string>
+    <string name="taking_photo">Mengambil foto</string>
+    <string name="failed_to_take_picture">Gagal mengambil gambar</string>
+    <string name="location_not_available">Lokasi GPS tidak tersedia</string>
+    <string name="photo_deleted">Foto dihapus</string>
+    <string name="no_gallery_app">Tidak ada aplikasi galeri</string>
+    <string name="screen_is_locked">Layar terkunci\nusap layar untuk membuka</string>
+    <string name="unlocked">Terbuka</string>
+    <string name="auto_stabilise_not_supported">Maaf, penyeimbang otomatis tidak didukung\ndi perangkat ini</string>
+    <string name="audio_disabled">Audio dinonaktifkan</string>
+    <string name="max_duration">Durasi maksimum</string>
+    <string name="color_effect">Efek warna</string>
+    <string name="scene_mode">Mode pemandangan</string>
+    <string name="white_balance">Keseimbangan putih</string>
+
+    <string name="angle">Sudut</string>
+    <string name="direction">Arah</string>
+    <string name="failed_to_open_camera_1">GAGAL MEMBUKA KAMERA.</string>
+    <string name="failed_to_open_camera_2">KAMERA MUNGKIN SEDANG DIGUNAKAN</string>
+    <string name="failed_to_open_camera_3">OLEH APLIKASI LAIN?</string>
+    <string name="iso">ISO</string>
+    <string name="zoom">Zoom</string>
+    <string name="free_memory">Bebas</string>
+    <string name="screen_lock_message_1">[TERKUNCI:</string>
+    <string name="screen_lock_message_2">Usap untuk membuka]</string>
+
+    <string name="failed_to_stamp">Gagal mencetak info ke foto</string>
+    <string name="metres_abbreviation">m</string>
+
+    <string name="preference_category_camera_effects">Efek Kamera</string>
+    <string name="preference_auto_stabilise">Penyeimbang otomatis</string>
+    <string name="preference_auto_stabilise_summary">Gambar akan diputar agar otomatis seimbang (hanya foto) (lebih lambat mengambil foto, dan mungkin gagal pada perangkat dengan memori terlalu rendah)</string>
+    <string name="preference_color_effect">Terapkan efek warna</string>
+    <string name="preference_color_effect_summary">Menerapkan efek warna yang dipilih ke foto</string>
+    <string name="preference_scene_mode">Terapkan mode pemandangan</string>
+    <string name="preference_scene_mode_summary">Optimalkan foto untuk pemandangan yang berbeda</string>
+    <string name="preference_white_balance">Atur keseimbangan putih</string>
+    <string name="preference_white_balance_summary">Pilih pengaturan untuk menyesuaikan keseimbangan putih</string>
+    <string name="preference_iso">Atur ISO</string>
+    <string name="preference_iso_summary">Nilai lebih tinggi berarti lebih sensitif terhadap cahaya (mungkin tidak berfungsi di sebagian perangkat)</string>
+    <string name="preference_exposure">Atur kompensasi eksposur</string>
+    <string name="preference_exposure_summary">Atur ke 0 untuk kompensasi eksposur bawaan</string>
+    <string name="preference_lock_orientation">Kunci orientasi foto/video</string>
+    <string name="preference_lock_orientation_summary">Jika diaktifkan, orientasi perangkat akan diabaikan, dan orientasi foto/video akan mengikuti orientasi yang ditentukan\n%s</string>
+    <string name="preference_face_detection">Deteksi wajah</string>
+    <string name="preference_face_detection_summary">Gunakan deteksi wajah alih-alih area fokus</string>
+
+    <string name="preference_category_camera_controls">Kontrol Kamera</string>
+    <string name="preference_timer">Timer</string>
+    <string name="preference_timer_beep">Bunyi timer</string>
+    <string name="preference_timer_beep_summary">Berbunyi saat timer menghitung mundur atau untuk jeda mode ulang</string>
+    <string name="preference_timer_speak">Hitungan mundur timer suara</string>
+    <string name="preference_timer_speak_summary">Ucapkan hitungan mundur untuk timer atau jeda mode ulang (dari 60 detik)</string>
+    <string name="preference_burst_mode">Ulang</string>
+    <string name="preference_burst_interval">Interval mode ulang</string>
+    <string name="preference_screen_camera_controls_more">Kontrol kamera lainnya\u2026</string>
+    <string name="preference_touch_capture">Sentuh untuk mengambil</string>
+    <string name="preference_touch_capture_summary">Ambil foto atau rekam video hanya dengan menyentuh atau mengetuk dua kali pratinjau</string>
+    <string name="preference_pause_preview">Jeda setelah mengambil foto</string>
+    <string name="preference_pause_preview_summary">Jeda layar setelah mengambil foto, dengan opsi untuk membagikan atau menghapus foto</string>
+    <string name="preference_shutter_sound">Suara rana</string>
+    <string name="preference_shutter_sound_summary">Mainkan suara saat mengambil foto</string>
+    <string name="preference_volume_keys">Tombol volume</string>
+    <string name="preference_audio_control">Opsi kontrol audio</string>
+    <string name="preference_audio_noise_control_sensitivity">Sensitivitas kontrol audio</string>
+    <string name="preference_audio_noise_control_sensitivity_summary">Sensitivitas tingkat kebisingan untuk opsi audio (suara keras)</string>
+    <string name="preference_save_location">Lokasi penyimpanan</string>
+    <string name="preference_save_location_summary">Folder untuk menyimpan berkas foto/video</string>
+    <string name="preference_save_photo_prefix">Awalan penyimpanan foto</string>
+    <string name="preference_save_photo_prefix_summary">Awalan yang digunakan untuk nama berkas foto</string>
+    <string name="preference_save_video_prefix">Awalan penyimpanan video</string>
+    <string name="preference_save_video_prefix_summary">Awalan yang digunakan untuk nama berkas video</string>
+    <string name="preference_save_zulu_time">Format waktu untuk nama berkas</string>
+    <string name="preference_show_when_locked">Tampilkan kamera saat terkunci</string>
+    <string name="preference_show_when_locked_summary">Jika diaktifkan, RenCam akan tetap tampil di atas layar kunci (Anda tetap harus membuka kunci untuk mengakses Pengaturan, Galeri, dll)</string>
+    <string name="preference_startup_focus">Lakukan fokus otomatis saat mulai</string>
+    <string name="preference_startup_focus_summary">Apakah akan fokus otomatis saat RenCam dimulai. Jika Anda mengalami masalah flash menyala saat memulai, nonaktifkan opsi ini</string>
+    <string name="preference_lock_video">Kunci layar saat merekam video</string>
+    <string name="preference_lock_video_summary">Saat merekam video, GUI akan dikunci untuk mencegah penghentian rekaman secara tidak sengaja. Usap layar untuk membuka. Perhatikan bahwa perekaman video akan selalu berhenti jika aplikasi masuk ke latar belakang atau layar dimatikan.</string>
+    <string name="preference_rotate_preview">Putar pratinjau</string>
+    <string name="preference_rotate_preview_summary">Opsi untuk memutar pratinjau (tidak memengaruhi hasil foto/video)\n%s</string>
+    <string name="preference_screen_gui">GUI di layar\u2026</string>
+    <string name="preference_preview_size">Ukuran pratinjau</string>
+    <string name="preference_ui_placement">Penempatan UI</string>
+    <string name="preference_immersive_mode">Mode imersif</string>
+    <string name="preference_show_zoom">Tampilkan zoom</string>
+    <string name="preference_show_zoom_summary">Tampilkan tingkat zoom kamera saat ini di layar (saat diperbesar)</string>
+    <string name="preference_show_zoom_controls">Tampilkan kontrol zoom -/+</string>
+    <string name="preference_show_zoom_controls_summary">Tampilkan tombol -/+ untuk kontrol zoom</string>
+    <string name="preference_show_zoom_slider_controls">Tampilkan kontrol slider zoom</string>
+    <string name="preference_show_zoom_slider_controls_summary">Tampilkan slider untuk kontrol zoom</string>
+    <string name="preference_show_iso">Tampilkan ISO</string>
+    <string name="preference_show_iso_summary">Tampilkan tingkat ISO saat ini. (Memerlukan Camera2 API.)</string>
+    <string name="preference_free_memory">Tampilkan memori bebas</string>
+    <string name="preference_free_memory_summary">Tampilkan sisa ruang penyimpanan perangkat di layar</string>
+    <string name="preference_show_angle">Tampilkan sudut</string>
+    <string name="preference_show_angle_summary">Tampilkan sudut orientasi perangkat saat ini di layar</string>
+    <string name="preference_show_angle_line">Tampilkan garis sudut</string>
+    <string name="preference_show_angle_line_summary">Tampilkan garis level horizontal</string>
+    <string name="preference_angle_highlight_color">Warna sorotan sudut/ketinggian</string>
+    <string name="preference_angle_highlight_color_summary">Warna sorotan saat kamera hampir seimbang</string>
+    <string name="preference_show_geo_direction">Tampilkan arah kompas</string>
+    <string name="preference_show_geo_direction_summary">Tampilkan arah kompas perangkat di layar</string>
+    <string name="preference_show_time">Tampilkan waktu</string>
+    <string name="preference_show_time_summary">Tampilkan waktu saat ini di layar</string>
+    <string name="preference_show_battery">Tampilkan baterai</string>
+    <string name="preference_show_battery_summary">Tampilkan tingkat baterai saat ini di layar</string>
+    <string name="preference_grid">Tampilkan kisi</string>
+    <string name="grid">Kisi</string>
+    <string name="preference_crop_guide">Tampilkan panduan potong</string>
+    <string name="preference_show_toasts">Tampilkan pesan di layar</string>
+    <string name="preference_show_toasts_summary">Apakah akan menampilkan pesan info sementara di layar</string>
+    <string name="preference_thumbnail_animation">Tampilkan animasi thumbnail</string>
+    <string name="preference_thumbnail_animation_summary">Tampilkan animasi thumbnail bergerak saat mengambil foto</string>
+    <string name="preference_take_photo_border">Tampilkan batas saat mengambil foto</string>
+    <string name="preference_take_photo_border_summary">Tampilkan batas di layar untuk menandakan pengambilan foto</string>
+    <string name="preference_keep_display_on">Biarkan layar menyala</string>
+    <string name="preference_keep_display_on_summary">Jika diaktifkan, layar tidak akan mati saat UI utama RenCam aktif</string>
+    <string name="preference_max_brightness">Paksa kecerahan maksimum</string>
+    <string name="preference_max_brightness_summary">Paksa tampilan layar pada kecerahan maksimum, alih-alih bawaan perangkat</string>
+
+    <string name="preference_category_camera_quality">Pengaturan Foto dan Video</string>
+    <string name="preference_screen_photo_settings">Pengaturan foto\u2026</string>
+    <string name="preference_screen_video_settings">Pengaturan video\u2026</string>
+    <string name="preference_screen_location_settings">Pengaturan lokasi\u2026</string>
+    <string name="preference_resolution">Resolusi kamera</string>
+    <string name="preference_quality">Kualitas gambar</string>
+    <string name="preference_raw">RAW</string>
+    <string name="preference_location">Simpan data lokasi (Geotagging)</string>
+    <string name="preference_location_summary">Simpan data lokasi GPS dalam foto/video (untuk foto, data lokasi hanya dapat disimpan dalam format JPEG dan DNG)</string>
+    <string name="preference_gps_direction">Simpan arah kompas</string>
+    <string name="preference_gps_direction_summary">Simpan arah kompas GPS dalam foto (hanya format JPEG)</string>
+    <string name="preference_require_location">Wajibkan data lokasi</string>
+    <string name="preference_require_location_summary">Jika data lokasi diaktifkan, ambil foto/video hanya jika data lokasi tersedia</string>
+    <string name="preference_stamp">Cetak foto</string>
+    <string name="preference_stamp_summary">Cetak tanggal dan waktu pada foto; serta info GPS jika data lokasi/arah diaktifkan\n%s</string>
+    <string name="preference_stamp_dateformat">Format tanggal cetak</string>
+    <string name="preference_stamp_timeformat">Format waktu cetak</string>
+    <string name="preference_stamp_gpsformat">Format cetak GPS</string>
+    <string name="preference_textstamp">Teks khusus</string>
+    <string name="preference_textstamp_summary">Cetak foto dengan teks khusus</string>
+    <string name="preference_stamp_fontsize">Ukuran font</string>
+    <string name="preference_stamp_font_color">Warna font</string>
+    <string name="preference_stamp_style">Gaya teks</string>
+    <string name="preference_background_photo_saving">Gunakan thread latar belakang</string>
+    <string name="preference_background_photo_saving_summary">Apakah akan menyimpan foto pada thread latar belakang (untuk operasi lebih cepat)</string>
+    <string name="video_quality">Resolusi video</string>
+    <string name="preference_force_video_4k">Paksa video 4K UHD (hanya berfungsi di sebagian perangkat)</string>
+    <string name="preference_video_stabilization">Aktifkan stabilisasi video digital</string>
+    <string name="preference_video_stabilization_summary">Stabilisasi video mengurangi guncangan akibat gerakan kamera baik pada pratinjau maupun pada video yang direkam. Ini mungkin tidak diperlukan jika perangkat Anda mendukung stabilisasi gambar optik (OIS).</string>
+    <string name="preference_video_bitrate">Bitrate video (perkiraan)</string>
+    <string name="preference_video_fps">Laju bingkai video (perkiraan)</string>
+    <string name="preference_video_max_duration">Durasi maksimum video</string>
+    <string name="preference_video_restart">Mulai ulang video setelah durasi maksimum</string>
+    <string name="preference_video_max_filesize">Ukuran berkas maksimum video</string>
+    <string name="preference_video_restart_max_filesize">Mulai ulang saat ukuran berkas maksimum</string>
+    <string name="preference_record_audio">Rekam audio</string>
+    <string name="preference_record_audio_summary">Rekam audio saat merekam video</string>
+    <string name="preference_record_audio_src">Sumber audio</string>
+    <string name="preference_record_audio_channels">Kanal audio</string>
+    <string name="preference_record_audio_channels_summary">Tentukan mono atau stereo untuk merekam audio (stereo hanya didukung di sebagian perangkat)</string>
+    <string name="preference_video_flash">Flash saat merekam video</string>
+    <string name="preference_video_flash_summary">Jika diaktifkan, flash akan menyala/mati saat merekam video (dapat digunakan untuk menandakan kamera masih merekam dari jarak jauh)</string>
+
+    <string name="preference_category_online">Lain-lain</string>
+    <string name="preference_online_help">Bantuan online</string>
+    <string name="preference_online_help_summary">Buka situs web RenCam di browser Anda</string>
+    <string name="preference_donate">Donasi untuk mendukung pengembangan</string>
+    <string name="preference_donate_summary">Jika Anda menyukai aplikasi ini, mohon pertimbangkan untuk memberikan donasi guna mendukung pengembangan. Anda dapat melakukannya dengan membeli \"aplikasi donasi\" saya - klik opsi ini untuk membuka halaman aplikasi donasi saya. Terima kasih!</string>
+    <string name="preference_use_camera2">Gunakan Camera2 API</string>
+    <string name="preference_use_camera2_summary">Mengaktifkan fitur tambahan seperti mode manual untuk eksposur, fokus, keseimbangan putih, bersama RAW (jika didukung perangkat), tetapi mungkin tidak berfungsi dengan baik di semua perangkat (akan menyebabkan restart)</string>
+    <string name="preference_about">Tentang</string>
+    <string name="preference_about_summary">Informasi aplikasi dan debug</string>
+    <string name="preference_reset">Reset pengaturan</string>
+    <string name="preference_reset_summary">Reset semua pengaturan RenCam ke bawaan</string>
+    <string name="preference_reset_question">Anda yakin ingin mereset semua pengaturan RenCam ke bawaan?</string>
+
+    <string name="about_available">Tersedia</string>
+    <string name="about_not_available">Tidak tersedia</string>
+    <string name="about_copy_to_clipboard">Salin ke clipboard</string>
+
+    <string name="take_photo">Ambil Foto</string>
+    <string name="gallery">Galeri</string>
+    <string name="exposure">Eksposur</string>
+    <string name="exposure_lock">Kunci eksposur</string>
+    <string name="focus_mode">Mode Fokus</string>
+    <string name="flash_mode">Mode Flash</string>
+    <string name="switch_to_front_camera">Beralih ke kamera depan</string>
+    <string name="switch_to_back_camera">Beralih ke kamera belakang</string>
+    <string name="switch_to_video">Beralih ke mode video</string>
+    <string name="switch_to_photo">Beralih ke mode foto</string>
+    <string name="trash">Hapus Gambar Terakhir</string>
+    <string name="share">Bagikan Foto</string>
+
+    <string name="parent_folder">Folder Induk</string>
+    <string name="new_folder">Folder Baru</string>
+    <string name="cant_write_folder">Tidak dapat menulis ke folder ini</string>
+    <string name="cant_access_folder">Tidak dapat mengakses folder ini</string>
+    <string name="enter_new_folder">Masukkan nama folder baru</string>
+    <string name="failed_create_folder">Gagal membuat folder</string>
+    <string name="folder_exists">Folder sudah ada</string>
+
+    <string name="saf_select_save_location">Pilih lokasi penyimpanan</string>
+    <string name="saf_cancelled">Storage Access Framework dibatalkan</string>
+    <string name="saf_permission_failed">Tidak dapat menyimpan ke folder ini</string>
+
+    <string name="permission_record_audio_not_available">Izin mikrofon tidak tersedia</string>
+    <string name="permission_location_not_available">Izin lokasi tidak tersedia</string>
+
+    <string name="start_video">Mulai merekam video</string>
+    <string name="stop_video">Berhenti merekam video</string>
+
+    <string name="max_filesize">Ukuran berkas maks</string>
+    <string name="mb_abbreviation">MB</string>
+    <string name="gb_abbreviation">GB</string>
+
+    <string name="audio_control_start">Mulai mendengarkan audio</string>
+    <string name="audio_control_stop">Berhenti mendengarkan audio</string>
+    <string name="speech_recognizer_started">Ucapkan \"cheese\"</string>
+    <string name="audio_listener_started">Buat suara keras</string>
+
+    <string name="dont_show_again">Jangan tampilkan lagi</string>
+
+    <string name="photo_mode">Mode Foto</string>
+    <string name="photo_mode_standard">Std</string>
+    <string name="photo_mode_standard_full">Standar</string>
+    <string name="photo_mode_hdr">HDR</string>
+    <string name="photo_mode_expo_bracketing">Expo {}</string>
+    <string name="photo_mode_expo_bracketing_full">Bracketing Eksposur</string>
+    <string name="photo_mode_fast_burst_full">Burst Cepat</string>
+    <string name="photo_mode_noise_reduction">NR</string>
+    <string name="photo_mode_noise_reduction_full">Pengurangan Noise</string>
+    <string name="preference_category_stamp">Cetak Foto</string>
+    <string name="preference_hdr_save_expo">Simpan semua gambar untuk mode HDR</string>
+
+    <string name="no_permission">IZIN TIDAK TERSEDIA</string>
+    <string name="permission_rationale_title">Izin diperlukan</string>
+    <string name="permission_rationale_camera">Izin kamera diperlukan untuk mengaktifkan kamera</string>
+    <string name="permission_rationale_storage">Izin baca/tulis penyimpanan diperlukan untuk menyimpan berkas hasil seperti foto atau video</string>
+    <string name="permission_rationale_record_audio">Izin mikrofon diperlukan untuk merekam video dengan audio, serta menggunakan opsi \"Kontrol audio\"</string>
+
+    <string name="preference_category_photo_debugging">Opsi debugging</string>
+    <string name="preference_category_video_debugging">Opsi debugging</string>
+    <string name="preference_camera2_fake_flash">Gunakan metode flash alternatif</string>
+    <string name="preference_camera2_fake_flash_summary">Aktifkan ini jika perangkat Anda memiliki perilaku flash yang bermasalah dengan Camera2 API</string>
+
+    <string name="seconds_abbreviation">d</string>
+
+    <string name="video_no_free_space">Ruang bebas tidak cukup untuk merekam video</string>
+    <string name="video_power_critical">Video dihentikan\nTingkat baterai sangat rendah</string>
+    <string name="preference_video_low_power_check">Pemeriksaan baterai kritis</string>
+    <string name="preference_video_low_power_check_summary">Hentikan perekaman video jika tingkat baterai sangat rendah. Ini membantu mengurangi risiko video rusak jika perangkat Anda tiba-tiba mati karena kehabisan daya.</string>
+
+    <string name="dark">Gelap</string>
+    <string name="bright">Terang</string>
+    <string name="exposure_shutter_speed">Kecepatan rana</string>
+
+    <string name="camera_error">Kesalahan kamera serius</string>
+
+    <string name="camera">Kamera</string>
+    <string name="record_video">Rekam video</string>
+    <string name="selfie">Selfie</string>
+
+    <string name="preference_front_camera_mirror">Cermin kamera depan</string>
+    <string name="preference_front_camera_mirror_summary">Apakah akan mencerminkan hasil foto saat menggunakan kamera depan\n%s</string>
+
+    <string name="preference_calibrate_level">Kalibrasi sudut level</string>
+    <string name="preference_calibrate_level_summary">Opsi ini mengkalibrasi akselerometer perangkat Anda, sehingga opsi penyeimbang otomatis dan level/sudut di layar berfungsi dengan benar</string>
+    <string name="preference_calibrate_level_calibrate">Kalibrasi</string>
+    <string name="preference_calibrate_level_reset">Reset</string>
+    <string name="preference_calibrate_level_calibrated">Level terkalibrasi</string>
+    <string name="preference_calibrate_level_calibration_reset">Kalibrasi level direset</string>
+
+    <string name="duration_unlimited">Tak terbatas</string>
+    <string name="duration_3s">3 detik</string>
+    <string name="duration_5s">5 detik</string>
+    <string name="duration_10s">10 detik</string>
+    <string name="duration_15s">15 detik</string>
+    <string name="duration_30s">30 detik</string>
+    <string name="duration_1m">1 menit</string>
+    <string name="duration_2m">2 menit</string>
+    <string name="duration_3m">3 menit</string>
+    <string name="duration_4m">4 menit</string>
+    <string name="duration_5m">5 menit</string>
+    <string name="duration_6m">6 menit</string>
+    <string name="duration_7m">7 menit</string>
+    <string name="duration_8m">8 menit</string>
+    <string name="duration_9m">9 menit</string>
+    <string name="duration_10m">10 menit</string>
+    <string name="duration_11m">11 menit</string>
+    <string name="duration_12m">12 menit</string>
+    <string name="duration_15m">15 menit</string>
+    <string name="duration_20m">20 menit</string>
+    <string name="duration_25m">25 menit</string>
+    <string name="duration_30m">30 menit</string>
+    <string name="duration_45m">45 menit</string>
+    <string name="duration_1h">1 jam</string>
+
+    <string name="preference_show_take_photo">Tampilkan ikon \"Ambil Foto\"</string>
+    <string name="preference_show_take_photo_summary">Tampilkan ikon untuk mengambil foto dan merekam video. Hapus centang jika Anda lebih suka mengambil foto dengan metode lain (misalnya, jika perangkat Anda memiliki tombol rana fisik, atau menggunakan tombol volume).</string>
+
+    <string name="video_pause">Video dijeda</string>
+    <string name="video_resume">Video dilanjutkan</string>
+    <string name="pause_video">Jeda perekaman video</string>
+    <string name="resume_video">Lanjutkan perekaman video</string>
+
+    <string name="capturing">Mengambil\u2026</string>
+
+    <string name="audio_listener_failed">Gagal menginisialisasi pendengaran audio</string>
+    <string name="failed_to_process_hdr">Gagal membuat gambar HDR</string>
+
+    <string name="white_balance_auto">Otomatis</string>
+    <string name="white_balance_cloudy">Berawan</string>
+    <string name="white_balance_daylight">Cahaya siang</string>
+    <string name="white_balance_fluorescent">Fluoresen</string>
+    <string name="white_balance_incandescent">Pijar</string>
+    <string name="white_balance_shade">Bayangan</string>
+    <string name="white_balance_twilight">Senja</string>
+    <string name="white_balance_warm">Hangat</string>
+    <string name="white_balance_manual">Manual</string>
+
+    <string name="scene_mode_action">Aksi</string>
+    <string name="scene_mode_barcode">Barcode</string>
+    <string name="scene_mode_beach">Pantai</string>
+    <string name="scene_mode_candlelight">Cahaya lilin</string>
+    <string name="scene_mode_auto">Otomatis</string>
+    <string name="scene_mode_fireworks">Kembang api</string>
+    <string name="scene_mode_landscape">Lanskap</string>
+    <string name="scene_mode_night">Malam</string>
+    <string name="scene_mode_night_portrait">Potret malam</string>
+    <string name="scene_mode_party">Pesta</string>
+    <string name="scene_mode_portrait">Potret</string>
+    <string name="scene_mode_snow">Salju</string>
+    <string name="scene_mode_sports">Olahraga</string>
+    <string name="scene_mode_steady_photo">Foto stabil</string>
+    <string name="scene_mode_sunset">Matahari terbenam</string>
+    <string name="scene_mode_theatre">Teater</string>
+
+    <string name="color_effect_aqua">Aqua</string>
+    <string name="color_effect_blackboard">Papan tulis hitam</string>
+    <string name="color_effect_mono">Mono</string>
+    <string name="color_effect_negative">Negatif</string>
+    <string name="color_effect_none">Tidak ada</string>
+    <string name="color_effect_posterize">Posterisasi</string>
+    <string name="color_effect_sepia">Sepia</string>
+    <string name="color_effect_solarize">Solarisasi</string>
+    <string name="color_effect_whiteboard">Papan tulis putih</string>
+
+    <string name="whats_new">Yang Baru:</string>
+    <string name="donate">Donasi</string>
+
+    <string name="face_detected">wajah</string>
+    <string name="faces_detected">wajah</string>
+    <string name="left_of_screen">di kiri layar</string>
+    <string name="right_of_screen">di kanan layar</string>
+    <string name="top_of_screen">di atas layar</string>
+    <string name="bottom_of_screen">di bawah layar</string>
+    <string name="centre_of_screen">di tengah</string>
+
+    <string name="high_speed">Kecepatan Tinggi</string>
+
+    <string name="preference_video_fps_default">Bawaan</string>
+
+    <string name="preference_category_exif_tags">Tag EXIF khusus</string>
+    <string name="preference_exif_artist">Artis</string>
+    <string name="preference_exif_copyright">Hak cipta</string>
+
+    <string name="processing">Memproses\u2026</string>
+
+    <string name="preference_raw_no">Tidak</string>
+    <string name="preference_raw_yes">Standar dan DNG (RAW)</string>
+    <string name="preference_raw_only">Hanya DNG (RAW)</string>
+
+    <string name="preference_stamp_dateformat_default">Bawaan</string>
+    <string name="preference_stamp_dateformat_yyyymmdd">yyyy-mm-dd (ISO 8601)</string>
+    <string name="preference_stamp_dateformat_ddmmyyyy">dd/mm/yyyy</string>
+    <string name="preference_stamp_dateformat_mmddyyyy">mm/dd/yyyy</string>
+    <string name="preference_stamp_dateformat_none">Tidak ada</string>
+
+    <string name="preference_fast_burst_n_images">Jumlah foto</string>
+
+    <string name="preference_focus_bracketing_n_images">Jumlah foto</string>
+
+    <string name="preference_video_capture_rate">Kecepatan</string>
+    <string name="preference_video_capture_rate_normal">Normal</string>
+    <string name="slow_motion_enabled">Gerak lambat diaktifkan</string>
+    <string name="slow_motion_disabled">Gerak lambat dinonaktifkan</string>
+
+    <string name="flash_off">Flash Mati</string>
+    <string name="flash_auto">Flash Otomatis</string>
+    <string name="flash_on">Flash Nyala</string>
+    <string name="flash_torch">Senter</string>
+    <string name="flash_red_eye">Mata Merah</string>
+    <string name="flash_frontscreen_auto">Flash Layar Otomatis</string>
+    <string name="flash_frontscreen_on">Flash Layar Nyala</string>
+    <string name="flash_frontscreen_torch">Senter Layar</string>
+
+    <string name="preference_antibanding">Anti-banding</string>
+    <string name="anti_banding_auto">Otomatis</string>
+    <string name="anti_banding_50hz">50Hz</string>
+    <string name="anti_banding_60hz">60Hz</string>
+    <string name="anti_banding_off">Mati</string>
+
+    <string name="preference_ghost_image">Gambar hantu</string>
+    <string name="preference_ghost_image_off">Mati</string>
+    <string name="preference_ghost_image_last">Foto terakhir diambil</string>
+    <string name="preference_ghost_image_selected">Gambar terpilih</string>
+
+    <string name="preference_camera2_photo_video_recording">Izinkan foto saat merekam video</string>
+    <string name="preference_camera2_photo_video_recording_summary">Mengizinkan pengambilan foto saat merekam video. Nonaktifkan ini jika ada masalah dengan perekaman video dengan Camera2 API di perangkat Anda.</string>
+
+    <string name="preference_video_log">Profil gambar video</string>
+    <string name="preference_video_log_off">Bawaan</string>
+    <string name="preference_video_log_fine">Log (Halus)</string>
+    <string name="preference_video_log_low">Log (Rendah)</string>
+    <string name="preference_video_log_medium">Log (Sedang)</string>
+    <string name="preference_video_log_strong">Log (Kuat)</string>
+    <string name="preference_video_log_extra_strong">Log (Sangat kuat)</string>
+    <string name="video_log">Profil Log</string>
+
+    <string name="preference_record_audio_src_camcorder">Camcorder</string>
+    <string name="preference_record_audio_src_mic">Mikrofon eksternal (jika ada)</string>
+    <string name="preference_record_audio_src_default">Sumber audio bawaan</string>
+    <string name="preference_record_audio_src_voice_communication">Dioptimalkan untuk panggilan suara</string>
+    <string name="preference_record_audio_src_voice_recognition">Dioptimalkan untuk pengenalan suara</string>
+    <string name="preference_record_audio_src_unprocessed">Tanpa proses</string>
+
+    <string name="preference_video_bitrate_default">Bawaan</string>
+
+    <string name="no_burst">tanpa burst</string>
+
+    <string name="preference_show_video_max_amp">Tampilkan meter tingkat audio</string>
+    <string name="preference_show_video_max_amp_summary">Apakah akan menampilkan tingkat audio di layar saat merekam video</string>
+
+    <string name="photo_mode_focus_bracketing">Fokus {}</string>
+    <string name="photo_mode_focus_bracketing_full">Bracketing Fokus</string>
+
+    <string name="magnetic_accuracy_title">Arah kompas</string>
+
+    <string name="accuracy_unreliable">Tidak dapat diandalkan</string>
+    <string name="accuracy_low">Rendah</string>
+    <string name="accuracy_medium">Sedang</string>
+    <string name="accuracy_high">Tinggi</string>
+    <string name="accuracy_unknown">Tidak diketahui</string>
+
+    <string name="preference_units_distance">Satuan jarak</string>
+    <string name="preference_units_distance_m">Meter</string>
+    <string name="preference_units_distance_ft">Kaki</string>
+    <string name="feet_abbreviation">ft</string>
+
+    <string name="preference_show_whats_new">Tampilkan dialog Yang Baru</string>
+    <string name="preference_show_whats_new_summary">Apakah akan menampilkan informasi tentang fitur baru dan peningkatan saat aplikasi diperbarui</string>
+
+    <string name="preference_screen_processing_settings">Pengaturan pemrosesan\u2026</string>
+
+    <string name="noise_reduction_mode_default">Bawaan</string>
+    <string name="noise_reduction_mode_off">Mati</string>
+    <string name="noise_reduction_mode_minimal">Minimal</string>
+    <string name="noise_reduction_mode_fast">Cepat</string>
+    <string name="noise_reduction_mode_high_quality">Kualitas Tinggi</string>
+
+    <string name="preference_focus_assist">Bantuan fokus</string>
+    <string name="preference_focus_assist_off">Mati</string>
+    <string name="preference_focus_assist_2x">2x</string>
+    <string name="preference_focus_assist_4x">4x</string>
+
+    <string name="previous">Sebelumnya</string>
+    <string name="next">Berikutnya</string>
+
+    <string name="preference_burst_mode_off">Mati</string>
+    <string name="preference_burst_mode_unlimited">Tak terbatas</string>
+
+    <string name="preference_burst_interval_no_delay">Tanpa jeda</string>
+
+    <string name="preference_video_max_filesize_default">Bawaan perangkat</string>
+
+    <string name="cancelled_focus_bracketing">Bracketing fokus dibatalkan</string>
+
+    <string name="preference_crop_guide_none">Tidak ada</string>
+
+    <string name="preference_audio_noise_control_sensitivity_3">+3 (sensitivitas tinggi)</string>
+    <string name="preference_audio_noise_control_sensitivity_0">0 (bawaan)</string>
+    <string name="preference_audio_noise_control_sensitivity_m3">-3 (sensitivitas rendah)</string>
+
+    <string name="preference_hdr_contrast_enhancement">Peningkatan kontras HDR</string>
+    <string name="preference_hdr_contrast_enhancement_off">Mati</string>
+    <string name="preference_hdr_contrast_enhancement_smart">Pintar</string>
+    <string name="preference_hdr_contrast_enhancement_always">Selalu</string>
+
+    <string name="preference_video_output_format">Format video</string>
+    <string name="preference_video_output_format_default">Bawaan</string>
+    <string name="preference_video_output_format_3gpp">3GPP</string>
+    <string name="preference_video_output_format_webm">WebM (audio tidak didukung)</string>
+
+    <string name="preference_screen_settings_manager">Manajer pengaturan</string>
+
+    <string name="preference_save_settings">Simpan pengaturan</string>
+    <string name="preference_save_settings_summary">Menyimpan semua pengaturan RenCam ke berkas</string>
+    <string name="preference_save_settings_filename">Nama pengaturan tersimpan</string>
+
+    <string name="preference_restore_settings">Pulihkan pengaturan</string>
+    <string name="preference_restore_settings_summary">Memulihkan pengaturan yang sebelumnya disimpan. Ini akan menimpa semua pengaturan saat ini dengan pengaturan yang disimpan!</string>
+
+    <string name="saved_settings">Pengaturan tersimpan</string>
+    <string name="save_settings_failed">Gagal menyimpan pengaturan</string>
+    <string name="restore_settings_failed">Gagal memulihkan pengaturan</string>
+
+    <string name="preference_image_format">Format gambar</string>
+    <string name="preference_image_format_jpeg">JPEG</string>
+    <string name="preference_image_format_webp">WebP</string>
+    <string name="preference_image_format_png">PNG</string>
+
+    <string name="preference_nr_mode">Mode NR</string>
+    <string name="preference_nr_mode_normal">Normal</string>
+    <string name="preference_nr_mode_low_light">Cahaya rendah</string>
+
+    <string name="preference_ui_placement_left">Antarmuka pengguna tangan kiri</string>
+    <string name="preference_ui_placement_right">Antarmuka pengguna tangan kanan</string>
+    <string name="preference_ui_placement_top">Ikon di sepanjang atas (potret)</string>
+
+    <string name="preference_show_face_detection">Tampilkan ikon deteksi wajah</string>
+    <string name="preference_show_face_detection_summary">Apakah akan menampilkan ikon di layar untuk mengaktifkan atau menonaktifkan deteksi wajah</string>
+    <string name="face_detection_enable">Aktifkan deteksi wajah</string>
+    <string name="face_detection_disable">Nonaktifkan deteksi wajah</string>
+    <string name="face_detection_enabled">Deteksi wajah diaktifkan</string>
+    <string name="face_detection_disabled">Deteksi wajah dinonaktifkan</string>
+
+    <string name="preference_show_auto_level">Tampilkan ikon penyeimbang otomatis</string>
+    <string name="auto_level_enable">Aktifkan penyeimbang otomatis</string>
+    <string name="auto_level_disable">Nonaktifkan penyeimbang otomatis</string>
+
+    <string name="preference_show_stamp">Tampilkan ikon cetak foto</string>
+    <string name="stamp_enable">Aktifkan cetak foto</string>
+    <string name="stamp_disable">Nonaktifkan cetak foto</string>
+    <string name="stamp_enabled">Cetak foto diaktifkan</string>
+    <string name="stamp_disabled">Cetak foto dinonaktifkan</string>
+
+    <string name="white_balance_lock">Kunci keseimbangan putih</string>
+    <string name="white_balance_unlock">Buka kunci keseimbangan putih</string>
+    <string name="white_balance_locked">Keseimbangan putih terkunci</string>
+    <string name="white_balance_unlocked">Keseimbangan putih tidak terkunci</string>
+
+    <string name="exposure_unlock">Buka kunci eksposur</string>
+
+    <string name="preference_nr_mode_low_light_message">Mode cahaya rendah: mohon pegang kamera dengan stabil</string>
+
+    <string name="photo_mode_panorama">Pano</string>
+    <string name="photo_mode_panorama_full">Panorama</string>
+
+    <string name="preference_screen_remote_control">Kontrol jarak jauh Bluetooth LE\u2026</string>
+    <string name="preference_enable_remote">Aktifkan kontrol jarak jauh Bluetooth LE</string>
+    <string name="preference_enable_remote_summary">Aktifkan perangkat kontrol jarak jauh Bluetooth LE (BLE)</string>
+    <string name="preference_remote_type">Jenis perangkat jarak jauh</string>
+
+    <string name="ble_not_supported">BLE tidak didukung</string>
+    <string name="scan_ble">Pindai Perangkat BLE</string>
+    <string name="bluetooth_not_supported">Bluetooth tidak didukung.</string>
+    <string name="unknown_device">Perangkat tidak dikenal</string>
+    <string name="preference_remote_disconnect_screen_dim">Redupkan layar jika jarak jauh terputus</string>
+    <string name="remote_connected">Jarak jauh terhubung</string>
+
+    <string name="preference_stamp_geo_address">Gunakan alamat</string>
+    <string name="preference_stamp_geo_address_no">Jangan tampilkan alamat</string>
+
+    <string name="preference_show_store_location">Tampilkan ikon data lokasi</string>
+    <string name="preference_location_enable">Simpan data lokasi</string>
+    <string name="preference_location_disable">Berhenti menyimpan data lokasi</string>
+
+    <string name="preference_histogram">Tampilkan histogram</string>
+    <string name="preference_histogram_off">Mati</string>
+    <string name="preference_histogram_rgb">Warna RGB</string>
+    <string name="preference_histogram_luminance">Luminansi</string>
+
+    <string name="preference_zebra_stripes">Tampilkan garis zebra</string>
+    <string name="preference_zebra_stripes_off">Mati</string>
+
+    <string name="preference_focus_peaking">Focus peaking</string>
+    <string name="preference_focus_peaking_off">Mati</string>
+    <string name="preference_focus_peaking_on">Nyala</string>
+    <string name="preference_focus_peaking_color">Warna focus peaking</string>
+
+    <string name="remaining">Tersisa</string>
+
+    <string name="preference_preview">Pratinjau kamera\u2026</string>
+
+    <string name="cycle_flash">Siklus flash</string>
+    <string name="preference_show_cycle_flash">Tampilkan ikon flash</string>
+    <string name="preference_show_cycle_flash_summary">Apakah akan menampilkan ikon di layar untuk menyiklus opsi flash, alih-alih menampilkan opsi flash pada menu popup. Perhatikan bahwa senter tidak tersedia jika menggunakan ikon ini.</string>
+
+    <string name="cycle_raw">Siklus mode RAW</string>
+    <string name="preference_show_cycle_raw">Tampilkan ikon RAW</string>
+    <string name="preference_show_cycle_raw_summary">Apakah akan menampilkan ikon di layar untuk menyiklus mode RAW</string>
+
+    <string name="bluetooth_current_remote">Jarak jauh saat ini:</string>
+    <string name="bluetooth_scan">Pindai</string>
+
+    <string name="preference_stamp_style_shadowed">Teks berbayang</string>
+    <string name="preference_stamp_style_plain">Teks biasa</string>
+    <string name="preference_stamp_style_background">Teks dengan latar berbayang</string>
+
+    <string name="image_saving_notification">Menyimpan gambar\u2026</string>
+
+    <string name="finish_panorama">Selesaikan panorama</string>
+    <string name="cancel_panorama">Batalkan panorama</string>
+    <string name="panorama_cancelled">Panorama dibatalkan</string>
+    <string name="failed_to_process_panorama">Gagal membuat gambar Panorama</string>
+
+    <string name="preference_panorama_crop">Potong otomatis panorama</string>
+    <string name="preference_panorama_save">Gambar asli panorama</string>
+    <string name="preference_panorama_save_no">Jangan simpan gambar asli</string>
+    <string name="preference_panorama_save_all">Simpan gambar asli</string>
+
+    <string name="camera_id">ID</string>
+
+    <string name="preference_camera_api">Camera API</string>
+    <string name="preference_camera_api_old">Camera API asli</string>
+    <string name="preference_camera_api_camera2">Camera2 API</string>
+
+    <string name="intro_text">Sentuh untuk fokus, dan tekan tombol kamera biru untuk mengambil foto.
+        \n\nUntuk menonaktifkan kecerahan layar maksimum, lihat Pengaturan/GUI di layar/\"Paksa kecerahan maksimum\".
+        Untuk menyimpan ke kartu SD pada Android 5+, lihat Pengaturan/Kontrol kamera lainnya/\"Storage Access Framework\".
+        Untuk bantuan lebih lanjut, klik \"Bantuan online\" dari Pengaturan.
+    </string>
+
+    <string name="preference_select_remote">Pilih perangkat jarak jauh</string>
+
+    <string name="preference_immersive_mode_off">Mati</string>
+    <string name="preference_immersive_mode_low_profile">Hanya redupkan tombol navigasi virtual di layar</string>
+    <string name="preference_immersive_mode_navigation">Sembunyikan tombol navigasi virtual di layar</string>
+    <string name="preference_immersive_mode_gui">Sembunyikan GUI</string>
+    <string name="preference_immersive_mode_everything">Sembunyikan semuanya</string>
+
+    <string name="preference_ghost_image_alpha">Opasitas gambar hantu</string>
+
+    <string name="preference_zebra_stripes_color_black">Hitam</string>
+    <string name="preference_zebra_stripes_color_red">Merah</string>
+    <string name="preference_zebra_stripes_color_orange">Oranye</string>
+    <string name="preference_zebra_stripes_color_transparent">Transparan</string>
+    <string name="preference_zebra_stripes_color_white">Putih</string>
+
+    <string name="external_camera">Kamera eksternal</string>
+    <string name="ultrawide">Ultra-lebar</string>
+
+    <string name="switch_to_external_camera">Beralih ke kamera eksternal</string>
+    <string name="switch_to_unknown_camera">Beralih kamera</string>
+    <string name="switch_multi_camera">Beralih antar beberapa kamera</string>
+
+    <string name="preference_show_camera_id">Tampilkan ID kamera</string>
+    <string name="preference_show_camera_id_summary">Tampilkan nomor ID kamera saat ini di layar</string>
+
+    <string name="preference_allow_long_press">Izinkan aksi tekan lama</string>
+    <string name="preference_allow_long_press_summary">Apakah akan mengizinkan aksi tekan lama (misalnya, tekan lama pada galeri untuk mengubah lokasi penyimpanan).</string>
+
+    <string name="aperture">Bukaan</string>
+
+    <string name="error_features_4k">4K UHD</string>
+    <string name="error_features_bitrate">Bitrate</string>
+    <string name="error_features_frame_rate">Laju bingkai</string>
+    <string name="error_features_slow_motion">Gerak lambat</string>
+
+    <string name="preference_audio_control_none">Tidak ada</string>
+    <string name="preference_audio_control_noise">Suara keras</string>
+    <string name="preference_audio_control_voice">Perintah suara: \"cheese\"</string>
+
+    <string name="photo_mode_x_auto_full">Ekstensi: Otomatis</string>
+    <string name="photo_mode_x_hdr_full">Ekstensi: HDR</string>
+    <string name="photo_mode_x_night_full">Ekstensi: Malam</string>
+    <string name="photo_mode_x_bokeh_full">Ekstensi: Bokeh</string>
+    <string name="photo_mode_x_beauty_full">Ekstensi: Kecantikan / Retouch Wajah</string>
+
+    <string name="preference_hdr_tonemapping">Tonemapping HDR</string>
+    <string name="preference_hdr_tonemapping_clamp">Clamp sederhana</string>
+    <string name="preference_hdr_tonemapping_exponential">Eksponensial</string>
+    <string name="preference_hdr_tonemapping_default">Bawaan</string>
+
+    <string name="preference_remove_device_exif">Hapus data EXIF perangkat</string>
+    <string name="preference_remove_device_exif_off">Jangan hapus data EXIF perangkat</string>
+    <string name="preference_remove_device_exif_on">Hapus data EXIF perangkat</string>
+    <string name="preference_remove_device_exif_keep_datetime">Hapus kecuali tanggal/waktu</string>
+
+    <!-- ============================================================= -->
+    <!-- RenCam: Fitur Foto Live (Live Photo / Motion Photo)           -->
+    <!-- ============================================================= -->
+    <string name="preference_category_live_photo">Foto Live</string>
+    <string name="preference_live_photo_enable">Aktifkan Foto Live</string>
+    <string name="preference_live_photo_enable_summary">Ambil klip video pendek bersama setiap foto, lalu gabungkan menjadi satu Foto Live (Motion Photo). Foto utama tetap berupa JPEG resolusi penuh, dan video disematkan di dalamnya.</string>
+    <string name="preference_live_photo_duration">Durasi klip Foto Live</string>
+    <string name="preference_live_photo_duration_summary">Total durasi video yang disematkan ke dalam Foto Live. Klip dibagi menjadi porsi sebelum dan sesudah tombol rana ditekan.\n%s</string>
+    <string name="preference_live_photo_preroll">Durasi sebelum rana</string>
+    <string name="preference_live_photo_preroll_summary">Berapa lama video sebelum tombol rana ditekan yang akan disertakan (diambil dari buffer video yang terus berjalan).\n%s</string>
+    <string name="preference_live_photo_flash_behavior">Perilaku flash pada Foto Live</string>
+    <string name="preference_live_photo_flash_behavior_summary">Mengontrol bagaimana flash berfungsi saat mengambil Foto Live.\n%s</string>
+    <string name="preference_live_photo_flash_burst">Burst (disarankan)</string>
+    <string name="preference_live_photo_flash_burst_summary">Flash hanya menyala sesaat saat foto utama diambil (seperti kamera iPhone). Video tetap alami dan tidak diterangi lampu secara terus-menerus.</string>
+    <string name="preference_live_photo_flash_torch">Senter terus-menerus</string>
+    <string name="preference_live_photo_flash_torch_summary">Flash menyala terus selama pengambilan. Video akan tampak terang seperti direkam dengan lampu. Tidak disarankan.</string>
+    <string name="preference_live_photo_flash_off">Mati</string>
+    <string name="preference_live_photo_flash_off_summary">Tidak menggunakan flash untuk Foto Live.</string>
+    <string name="preference_live_photo_audio">Rekam audio pada Foto Live</string>
+    <string name="preference_live_photo_audio_summary">Sertakan audio pada klip video Foto Live (jika didukung perangkat).</string>
+    <string name="live_photo_enabled">Foto Live diaktifkan</string>
+    <string name="live_photo_disabled">Foto Live dinonaktifkan</string>
+    <string name="live_photo_processing">Membuat Foto Live\u2026</string>
+    <string name="live_photo_saved">Foto Live disimpan</string>
+    <string name="live_photo_failed">Gagal membuat Foto Live</string>
+    <string name="live_photo_not_supported">Foto Live tidak didukung di perangkat ini</string>
+    <string name="live_photo_buffering">Menyangga video untuk Foto Live\u2026</string>
+    <string name="live_photo_hold_steady">Tahan kamera dengan stabil untuk Foto Live</string>
+    <string name="live_photo_duration_1s">1 detik</string>
+    <string name="live_photo_duration_2s">2 detik</string>
+    <string name="live_photo_duration_3s">3 detik</string>
+    <string name="live_photo_duration_4s">4 detik</string>
+    <string name="live_photo_duration_5s">5 detik</string>
+    <string name="live_photo_duration_6s">6 detik</string>
+
+    <!-- Pengaturan bahasa -->
+    <string name="preference_category_language">Bahasa</string>
+    <string name="preference_language">Bahasa aplikasi</string>
+    <string name="preference_language_summary">Pilih bahasa antarmuka RenCam. \"Ikuti sistem\" akan menggunakan bahasa perangkat Anda.\n%s</string>
+    <string name="preference_language_system">Ikuti sistem</string>
+    <string name="preference_language_indonesian">Bahasa Indonesia</string>
+    <string name="preference_language_english">English</string>
+    <string name="language_changed">Bahasa diubah. Mulai ulang aplikasi untuk menerapkan.</string>
+
+    <!-- Galeri dalam aplikasi -->
+    <string name="gallery_title">Galeri RenCam</string>
+    <string name="gallery_empty">Belum ada foto atau video</string>
+    <string name="gallery_close">Tutup</string>
+    <string name="gallery_prev">Sebelumnya</string>
+    <string name="gallery_next">Berikutnya</string>
+    <string name="gallery_video">Video</string>
+    <string name="gallery_open_system">Buka di galeri sistem</string>
+    <string name="gallery_open">Buka Galeri RenCam</string>
+    <string name="live_photo_badge">LIVE</string>
+    <string name="live_photo_play">Putar Live Photo</string>
+
+</resources>

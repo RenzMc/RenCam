@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RenCam in-app gallery: grid of recent photos/videos with Live Photo previews. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#FF101014">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="#FF1B1B22">
+
+        <TextView
+            android:id="@+id/gallery_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="16dp"
+            android:layout_marginLeft="16dp"
+            android:text="@string/gallery_title"
+            android:textColor="#FFFFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/gallery_system_button"
+            android:layout_width="48dp"
+            android:layout_height="match_parent"
+            android:layout_toStartOf="@+id/gallery_close_button"
+            android:layout_toLeftOf="@+id/gallery_close_button"
+            android:background="?android:attr/selectableItemBackground"
+            android:src="@drawable/baseline_photo_library_white_48"
+            android:contentDescription="@string/gallery_open_system" />
+
+        <ImageButton
+            android:id="@+id/gallery_close_button"
+            android:layout_width="48dp"
+            android:layout_height="match_parent"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentRight="true"
+            android:background="?android:attr/selectableItemBackground"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="@string/gallery_close" />
+    </RelativeLayout>
+
+    <TextView
+        android:id="@+id/gallery_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
+        android:gravity="center"
+        android:text="@string/gallery_empty"
+        android:textColor="#FFB0B0B8"
+        android:textSize="15sp"
+        android:visibility="gone" />
+
+    <GridView
+        android:id="@+id/gallery_grid"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:numColumns="3"
+        android:horizontalSpacing="2dp"
+        android:verticalSpacing="2dp"
+        android:stretchMode="columnWidth"
+        android:gravity="center"
+        android:padding="2dp"
+        android:clipToPadding="false" />
+
+</LinearLayout>

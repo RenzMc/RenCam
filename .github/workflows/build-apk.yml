@@ -1,0 +1,198 @@
+# =============================================================================
+#  RenCam — Build APK  (GitHub Actions)
+#  Author: RenzMc
+#
+#  Builds the RenCam Android app (a rebranded fork of OpenCamera) and uploads
+#  ready-to-install APK artifacts.
+#
+#  What it does:
+#    1. Checks out the repository.
+#    2. Sets up JDK 17 (required by Android Gradle Plugin 8.0.x).
+#    3. Sets up the Android SDK (cmdline-tools + platform-tools, accepts licenses).
+#    4. Installs the SDK platform/build-tools the project targets.
+#    5. Configures Gradle with build caching via gradle/actions/setup-gradle.
+#    6. Builds the debug APK (already signed with the debug key) and the
+#       release APK, then signs the release APK so it is installable.
+#    7. Uploads all APKs as downloadable artifacts.
+#
+#  Optional repository secrets (Settings -> Secrets and variables -> Actions):
+#    RENCAM_KEYSTORE_BASE64   base64 of your release .keystore (else a throwaway
+#                             keystore is generated automatically).
+#    RENCAM_KEYSTORE_PASSWORD keystore password
+#    RENCAM_KEY_ALIAS         key alias
+#    RENCAM_KEY_PASSWORD      key password
+# =============================================================================
+
+name: Build RenCam APK
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE*'
+      - '.gitignore'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Which APK(s) to build'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - debug
+          - release
+
+# Only the default GITHUB_TOKEN is needed; grant it read-only access.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Assemble RenCam APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      # Compile against the SDK the project declares (compileSdkVersion 33).
+      ANDROID_COMPILE_SDK: "33"
+      ANDROID_BUILD_TOOLS: "33.0.2"
+      # Optional signing secrets (empty -> a throwaway keystore is generated).
+      KEYSTORE_BASE64: ${{ secrets.RENCAM_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.RENCAM_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.RENCAM_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.RENCAM_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install required SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-${ANDROID_COMPILE_SDK}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}"
+          # Accept any remaining licenses non-interactively.
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.variant == 'both' || github.event.inputs.variant == 'debug' }}
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Build release APK (unsigned)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.variant == 'both' || github.event.inputs.variant == 'release' }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Sign release APK
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.variant == 'both' || github.event.inputs.variant == 'release' }}
+        run: |
+          set -euo pipefail
+
+          UNSIGNED=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$UNSIGNED" ]; then
+            echo "::error::No release APK was produced by assembleRelease."
+            exit 1
+          fi
+          echo "Unsigned release APK: $UNSIGNED"
+
+          KS_PASS="${KEYSTORE_PASSWORD:-rencam123}"
+          K_ALIAS="${KEY_ALIAS:-rencam}"
+          K_PASS="${KEY_PASSWORD:-$KS_PASS}"
+
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            echo "Using keystore provided via RENCAM_KEYSTORE_BASE64 secret."
+            echo "$KEYSTORE_BASE64" | base64 -d > rencam-release.keystore
+          else
+            echo "No keystore secret found - generating a throwaway CI keystore."
+            keytool -genkeypair -v \
+              -keystore rencam-release.keystore \
+              -storepass "$KS_PASS" -alias "$K_ALIAS" -keypass "$K_PASS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=RenCam, OU=RenzMc, O=RenzMc, L=Jakarta, C=ID"
+          fi
+
+          BUILD_TOOLS_DIR=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -n 1)
+          echo "Using build-tools: $BUILD_TOOLS_DIR"
+
+          "$BUILD_TOOLS_DIR/zipalign" -p -f 4 "$UNSIGNED" app-release-aligned.apk
+          "$BUILD_TOOLS_DIR/apksigner" sign \
+            --ks rencam-release.keystore \
+            --ks-pass "pass:$KS_PASS" \
+            --ks-key-alias "$K_ALIAS" \
+            --key-pass "pass:$K_PASS" \
+            --out app-release-signed.apk \
+            app-release-aligned.apk
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose app-release-signed.apk
+
+      - name: Collect APK artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+
+          # Debug APK (signed with the Android debug key by Gradle).
+          while IFS= read -r -d '' f; do
+            cp "$f" "artifacts/RenCam-debug-$(basename "$f")"
+          done < <(find app/build/outputs/apk/debug -name '*.apk' -print0 2>/dev/null || true)
+
+          # Signed release APK.
+          if [ -f app-release-signed.apk ]; then
+            cp app-release-signed.apk artifacts/RenCam-release-signed.apk
+          fi
+
+          echo "===== Artifacts ====="
+          ls -lh artifacts || true
+          echo "====================="
+          if [ -z "$(ls -A artifacts 2>/dev/null)" ]; then
+            echo "::error::No APK artifacts were collected."
+            exit 1
+          fi
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: RenCam-APK
+          path: artifacts/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## RenCam APK build"
+            echo ""
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Commit | \`${GITHUB_SHA}\` |"
+            echo "| Ref | \`${GITHUB_REF}\` |"
+            echo "| JDK | 17 (temurin) |"
+            echo "| Compile SDK | ${ANDROID_COMPILE_SDK} |"
+            echo "| Build tools | ${ANDROID_BUILD_TOOLS} |"
+            echo ""
+            echo "### Produced APKs"
+            echo '```'
+            ls -lh artifacts 2>/dev/null || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
