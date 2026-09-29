@@ -428,8 +428,14 @@ public class LivePhotoManager {
         boolean trimmed = LivePhotoHelper.trimVideo(context, video_file, trimmed_file, window_start, window_end);
         File source = (trimmed && trimmed_file.exists() && trimmed_file.length() > 100) ? trimmed_file : video_file;
         if( source == video_file ) {
-            // Trimming failed - use the whole clip, so the cover offset must be relative to its start.
+            // Trimming failed - use the whole clip, so the cover offset must be relative to its start,
+            // and discard the (empty/partial) trim output.
             window_start = 0L;
+            deleteQuietly(trimmed_file);
+        }
+        else {
+            // Trimming succeeded - the trimmed file is the one we keep, so the raw buffer can go now.
+            deleteQuietly(video_file);
         }
 
         // The cover frame is taken at the shutter moment (plus a small delay so the flash has lit it).
@@ -443,23 +449,20 @@ public class LivePhotoManager {
         }
 
         final byte[] cover = extractCoverJpeg(source, cover_ms);
-        deleteQuietly(trimmed_file);
         if( cover == null ) {
             Log.e(TAG, "failed to extract cover frame from live photo video");
-            deleteQuietly(video_file);
+            deleteQuietly(source);
             return;
         }
 
         // Register the pending video *before* saving, so that when the still is saved (possibly
-        // synchronously) the onStillSaved() callback finds it.
+        // synchronously) the onStillSaved() callback finds it. NOTE: `source` (the trimmed clip) is
+        // kept alive here and is only deleted once packaging has finished - deleting it now would
+        // leave the still as a plain JPEG.
         synchronized( LivePhotoManager.this ) {
             pending_video_file = source;
             pending_presentation_us = cover_ms * 1000L;
             waiting_for_cover = true;
-        }
-        if( source != video_file ) {
-            // The trimmed file is the one we keep; the raw buffer can go.
-            deleteQuietly(video_file);
         }
 
         // Save the cover on the main thread, as saveImage() touches UI-related state.
