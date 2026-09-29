@@ -77,6 +77,12 @@ public class LivePhotoManager {
      */
     private static final int COVER_DELAY_MS = 250;
     /**
+     * Extra recording time kept after the post-roll before the buffer is stopped. MediaRecorder can
+     * drop the last few frames when it is stopped, so we record a little longer than the 3s window
+     * and then trim back to exactly 3s - this guarantees the packaged clip is never shorter than 3s.
+     */
+    private static final int RECORD_MARGIN_MS = 400;
+    /**
      * Upper bound on the continuously running buffer. When it is reached the buffer is stopped and
      * restarted, so it can't grow without limit while the camera sits idle.
      */
@@ -373,7 +379,9 @@ public class LivePhotoManager {
                 onPostRollElapsed();
             }
         };
-        handler.postDelayed(post_roll_runnable, post_roll_ms);
+        // Record a little past the trim window (see RECORD_MARGIN_MS) so the last frames are flushed
+        // and the trimmed clip still reaches the full 3 seconds.
+        handler.postDelayed(post_roll_runnable, post_roll_ms + RECORD_MARGIN_MS);
         return true;
     }
 
@@ -465,7 +473,7 @@ public class LivePhotoManager {
             cover_ms = 0L;
         }
 
-        final byte[] cover = extractCoverJpeg(source, cover_ms);
+        final byte[] cover = extractCoverJpeg(source, cover_ms, getTargetStillAspectRatio());
         if( cover == null ) {
             Log.e(TAG, "failed to extract cover frame from live photo video");
             deleteQuietly(source);
@@ -502,12 +510,15 @@ public class LivePhotoManager {
     }
 
     /** Extracts a single frame from the recorded video and encodes it as JPEG bytes. */
-    private byte[] extractCoverJpeg(File video_file, long offset_ms) {
+    private byte[] extractCoverJpeg(File video_file, long offset_ms, double target_aspect_ratio) {
         Bitmap bitmap = LivePhotoHelper.extractVideoFrame(context, Uri.fromFile(video_file), offset_ms);
         if( bitmap == null ) {
             return null;
         }
         try {
+            // Match the still to the photo aspect ratio (e.g. 4:3 / 16:9) so the saved cover has the
+            // same framing as a normal photo - the video buffer may be a wider 16:9 crop.
+            bitmap = cropToAspect(bitmap, target_aspect_ratio);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             bitmap.compress(Bitmap.CompressFormat.JPEG, 95, bos);
             return bos.toByteArray();
@@ -515,6 +526,73 @@ public class LivePhotoManager {
         finally {
             bitmap.recycle();
         }
+    }
+
+    /**
+     * Centre-crops a bitmap to the given <b>landscape</b> width/height aspect ratio. If the bitmap is
+     * portrait the ratio is inverted so the still keeps the same shape as the photo in the current
+     * orientation. Returns the original bitmap if the ratio is unknown or already close enough.
+     */
+    private Bitmap cropToAspect(Bitmap bitmap, double landscape_ratio) {
+        if( bitmap == null || landscape_ratio <= 0.0 ) {
+            return bitmap;
+        }
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+        if( w <= 0 || h <= 0 ) {
+            return bitmap;
+        }
+        double target_ratio = (h > w) ? (1.0 / landscape_ratio) : landscape_ratio;
+        double current = (double) w / (double) h;
+        if( Math.abs(current - target_ratio) < 0.02 ) {
+            return bitmap;
+        }
+        int new_w = w;
+        int new_h = h;
+        if( current > target_ratio ) {
+            // too wide - crop the width
+            new_w = (int) Math.round(h * target_ratio);
+        }
+        else {
+            // too tall - crop the height
+            new_h = (int) Math.round(w / target_ratio);
+        }
+        new_w = Math.max(1, Math.min(w, new_w));
+        new_h = Math.max(1, Math.min(h, new_h));
+        int x = (w - new_w) / 2;
+        int y = (h - new_h) / 2;
+        try {
+            Bitmap cropped = Bitmap.createBitmap(bitmap, x, y, new_w, new_h);
+            if( cropped != bitmap ) {
+                bitmap.recycle();
+            }
+            return cropped;
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to crop cover frame", e);
+            return bitmap;
+        }
+    }
+
+    /**
+     * The width/height aspect ratio the still photo should have (in landscape terms), taken from the
+     * camera's current picture size. Returns 0 if it can't be determined (in which case the cover is
+     * saved with the video's own aspect ratio).
+     */
+    private double getTargetStillAspectRatio() {
+        try {
+            CameraController controller = preview != null ? preview.getCameraController() : null;
+            if( controller != null ) {
+                CameraController.Size size = controller.getPictureSize();
+                if( size != null && size.width > 0 && size.height > 0 ) {
+                    return (double) size.width / (double) size.height;
+                }
+            }
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to get picture size for cover crop", e);
+        }
+        return 0.0;
     }
 
     /**

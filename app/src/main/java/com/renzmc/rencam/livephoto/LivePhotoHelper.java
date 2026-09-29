@@ -488,6 +488,15 @@ public final class LivePhotoHelper {
                 bitmap = retriever.getFrameAtTime(timeMs * 1000L,
                         MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
             }
+            if( bitmap == null ) {
+                return null;
+            }
+            // MediaMetadataRetriever returns the raw (un-rotated) frame: a portrait capture is stored
+            // as a landscape frame plus a rotation hint. Without applying the hint the still would be
+            // saved sideways (e.g. a 9:16 shot coming out as 16:9). Apply it here so the extracted
+            // still matches what the user saw in the preview.
+            int rotation = getVideoRotation(retriever);
+            bitmap = applyRotation(bitmap, rotation);
             return bitmap;
         } catch (Exception e) {
             Log.e(TAG, "Error extracting frame at " + timeMs + " ms", e);
@@ -497,6 +506,65 @@ public final class LivePhotoHelper {
                 retriever.release();
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    /** Reads the display rotation (0/90/180/270) of a video from an open retriever, or 0. */
+    private static int getVideoRotation(MediaMetadataRetriever retriever) {
+        try {
+            String rotation = retriever.extractMetadata(
+                    MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION);
+            if( rotation != null ) {
+                return ((Integer.parseInt(rotation) % 360) + 360) % 360;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading video rotation", e);
+        }
+        return 0;
+    }
+
+    /** Reads the display rotation (0/90/180/270) of a video, or 0 if unknown. */
+    public static int getVideoRotation(Context context, Uri videoUri) {
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        try {
+            retriever.setDataSource(context, videoUri);
+            return getVideoRotation(retriever);
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting video rotation", e);
+            return 0;
+        } finally {
+            try {
+                retriever.release();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /**
+     * Rotates a bitmap by the given display rotation. Guards against double-rotation: if the frame
+     * already comes back in the "rotated" orientation (some devices apply the rotation inside
+     * {@code getFrameAtTime}), it is returned unchanged.
+     */
+    private static Bitmap applyRotation(Bitmap bitmap, int rotation) {
+        if( bitmap == null || rotation == 0 ) {
+            return bitmap;
+        }
+        try {
+            if( (rotation == 90 || rotation == 270) && bitmap.getWidth() < bitmap.getHeight() ) {
+                // Already portrait - the frame was pre-rotated, so don't rotate it again.
+                return bitmap;
+            }
+            android.graphics.Matrix matrix = new android.graphics.Matrix();
+            matrix.postRotate(rotation);
+            Bitmap rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(),
+                    bitmap.getHeight(), matrix, true);
+            if( rotated != bitmap ) {
+                bitmap.recycle();
+            }
+            return rotated;
+        } catch (Exception e) {
+            Log.e(TAG, "Error rotating frame", e);
+            return bitmap;
         }
     }
 
@@ -578,6 +646,20 @@ public final class LivePhotoHelper {
                     if (mime.startsWith("video/")) {
                         videoTrackIdx = i;
                     }
+                }
+            }
+
+            // Preserve the source video's display rotation. MediaMuxer does NOT copy the rotation
+            // matrix from the input, so without this a portrait clip (stored as landscape + rotation
+            // hint) would be re-muxed as a landscape clip - which is exactly why a 9:16 Live Photo
+            // used to come out as 16:9.
+            int rotation = getVideoRotation(context, inputUri);
+            if( rotation != 0 ) {
+                try {
+                    muxer.setOrientationHint(rotation);
+                }
+                catch(Exception e) {
+                    Log.e(TAG, "failed to set orientation hint on muxer", e);
                 }
             }
 

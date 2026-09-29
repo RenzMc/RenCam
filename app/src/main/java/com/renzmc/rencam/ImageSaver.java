@@ -95,6 +95,16 @@ public class ImageSaver extends Thread {
     // Access to app_is_paused should always be synchronized to this (i.e., the ImageSaver class).
     private boolean app_is_paused = true;
 
+    // RenCam Live Photo: set (synchronously) just before saving the cover still of a Live Photo, so
+    // that the saved file gets the "MP" filename suffix required by the Motion Photo spec. Read
+    // synchronously while the Request is built, so toggling it around the saveImage() call is safe.
+    private boolean live_photo_cover = false;
+
+    /** RenCam Live Photo: marks the next still save as a Live Photo cover (adds the "MP" suffix). */
+    void setLivePhotoCover(boolean live_photo_cover) {
+        this.live_photo_cover = live_photo_cover;
+    }
+
     // for testing; must be volatile for test project reading the state
     // n.b., avoid using static, as static variables are shared between different instances of an application,
     // and won't be reset in subsequent tests in a suite!
@@ -187,6 +197,10 @@ public class ImageSaver extends Thread {
         final String custom_tag_artist;
         final String custom_tag_copyright;
         final int sample_factor; // sampling factor for thumbnail, higher means lower quality
+        // RenCam Live Photo: when true this request is saving the cover still of a Live Photo, so the
+        // filename must end with "MP" (required by the Google Motion Photo spec, otherwise readers
+        // such as WhatsApp may ignore the embedded video).
+        boolean live_photo_cover = false;
 
         Request(Type type,
                 ProcessType process_type,
@@ -911,6 +925,10 @@ public class ImageSaver extends Thread {
                 custom_tag_artist,
                 custom_tag_copyright,
                 sample_factor);
+
+        // RenCam Live Photo: capture the flag now (synchronously) so the background saver thread
+        // still knows this request is a Live Photo cover even after the caller resets the flag.
+        request.live_photo_cover = this.live_photo_cover;
 
         if( do_in_background ) {
             if( MyDebug.LOG )
@@ -1886,7 +1904,16 @@ public class ImageSaver extends Thread {
             // note, even if one image fails, we still try saving the other images - might as well give the user as many images as we can...
             byte [] image = request.jpeg_images.get(i);
             boolean multiple_jpegs = request.jpeg_images.size() > 1 && !first_only;
-            String filename_suffix = (multiple_jpegs || request.force_suffix) ? suffix + (i + request.suffix_offset) : "";
+            String filename_suffix;
+            if( request.live_photo_cover ) {
+                // RenCam Live Photo: the Motion Photo spec requires the filename to end with "MP"
+                // before the extension (e.g. IMG_20260929_194935MP.jpg); otherwise readers such as
+                // WhatsApp may ignore the embedded video and treat the file as a plain still.
+                filename_suffix = "MP";
+            }
+            else {
+                filename_suffix = (multiple_jpegs || request.force_suffix) ? suffix + (i + request.suffix_offset) : "";
+            }
             if( request.process_type == Request.ProcessType.X_NIGHT ) {
                 filename_suffix = "_Night" + filename_suffix;
             }

@@ -249,10 +249,14 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         // synchronously (before dispatching to the background saver), so toggling the flag around
         // the call is safe.
         force_jpeg_for_live_photo = true;
+        // RenCam Live Photo: give the saved still the "MP" filename suffix required by the Motion
+        // Photo spec (so WhatsApp and other readers recognise the embedded video).
+        imageSaver.setLivePhotoCover(true);
         try {
             return saveImage(false, images, date);
         }
         finally {
+            imageSaver.setLivePhotoCover(false);
             force_jpeg_for_live_photo = false;
         }
     }
