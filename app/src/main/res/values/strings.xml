@@ -1128,4 +1128,12 @@
     <string name="gallery_open">Open RenCam Gallery</string>
     <string name="live_photo_badge">LIVE</string>
     <string name="live_photo_play">Play Live Photo</string>
+
+    <!-- RenCam: 0.5x ultra-wide zoom toggle (only shown on devices that actually have an ultra-wide camera) -->
+    <string name="zoom_ratio">Zoom ratio</string>
+    <string name="zoom_ratio_1x">1x</string>
+    <string name="zoom_ratio_05x">0.5x</string>
+    <string name="zoom_ratio_switch_ultrawide">Switched to ultra-wide (0.5x)</string>
+    <string name="zoom_ratio_switch_main">Switched to main camera (1x)</string>
+    <string name="zoom_ratio_unavailable">Ultra-wide (0.5x) not available on this device</string>
 </resources>

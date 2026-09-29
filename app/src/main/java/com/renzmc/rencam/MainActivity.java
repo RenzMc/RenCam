@@ -93,6 +93,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
+import android.widget.TextView;
 import android.widget.ZoomControls;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -161,6 +162,8 @@ public class MainActivity extends AppCompatActivity {
     private List<Integer> back_camera_ids;
     private List<Integer> front_camera_ids;
     private List<Integer> other_camera_ids;
+    // RenCam: camera IDs that are ultra-wide (for the 0.5x zoom toggle). Populated once at startup.
+    private List<Integer> ultrawide_camera_ids;
 
     private final ToastBoxer switch_video_toast = new ToastBoxer();
     private final ToastBoxer screen_locked_toast = new ToastBoxer();
@@ -470,6 +473,16 @@ public class MainActivity extends AppCompatActivity {
                 this.other_camera_ids = null;
             }
         }
+
+        // RenCam: build the list of ultra-wide camera IDs once at startup (for the 0.5x zoom toggle).
+        // We do this here (rather than on demand) to avoid repeated camera-service calls from the UI.
+        this.ultrawide_camera_ids = new ArrayList<>();
+        for(int i=0;i<n_cameras;i++) {
+            if( computeIsCameraUltraWide(i) )
+                ultrawide_camera_ids.add(i);
+        }
+        if( MyDebug.LOG )
+            Log.d(TAG, "ultrawide_camera_ids: " + ultrawide_camera_ids);
 
         // initialise on-screen button visibility
         View switchCameraButton = findViewById(R.id.switch_camera);
@@ -833,6 +846,133 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return false;
+    }
+
+    /* ------------------------------------------------------------------------------------------
+     * RenCam: 0.5x ultra-wide zoom support.
+     *
+     * A true 0.5x field of view can only be obtained from a physical ultra-wide lens - it cannot be
+     * synthesised from a normal camera (digital zoom can only crop, i.e. go *above* 1x). So this
+     * feature is only offered on devices that actually expose an ultra-wide camera for the current
+     * facing. Detection reuses the same view-angle heuristic the camera list already uses
+     * (CameraControllerManager2.getDescription() appends the "Ultra-wide" string when the horizontal
+     * view angle exceeds ~90.5 degrees).
+     * ------------------------------------------------------------------------------------------ */
+
+    /** Computes (live) whether the given camera id is an ultra-wide camera, by inspecting the
+     *  camera description. This performs a camera-service call, so prefer isCameraUltraWide(). */
+    private boolean computeIsCameraUltraWide(int cameraId) {
+        if( preview == null || preview.getCameraControllerManager() == null )
+            return false;
+        String description = preview.getCameraControllerManager().getDescription(this, cameraId);
+        if( description == null )
+            return false;
+        String ultrawide = getResources().getString(R.string.ultrawide);
+        return description.contains(ultrawide);
+    }
+
+    /** Returns true if the given camera id is an ultra-wide camera. Uses the cached list built at
+     *  startup, falling back to a live check if it hasn't been built yet. */
+    private boolean isCameraUltraWide(int cameraId) {
+        if( ultrawide_camera_ids != null )
+            return ultrawide_camera_ids.contains(cameraId);
+        return computeIsCameraUltraWide(cameraId);
+    }
+
+    /** Returns the camera id of the ultra-wide camera for the current facing, or -1 if none. */
+    public int getUltraWideCameraId() {
+        if( preview == null || preview.getCameraControllerManager() == null )
+            return -1;
+        CameraControllerManager manager = preview.getCameraControllerManager();
+        int n_cameras = manager.getNumberOfCameras();
+        int currCameraId = getActualCameraId();
+        CameraController.Facing curr_facing = manager.getFacing(currCameraId);
+        for(int i=0;i<n_cameras;i++) {
+            if( i == currCameraId )
+                continue;
+            if( manager.getFacing(i) != curr_facing )
+                continue;
+            if( isCameraUltraWide(i) )
+                return i;
+        }
+        return -1;
+    }
+
+    /** Returns the camera id of the main (non ultra-wide) camera for the current facing, or -1. */
+    public int getMainCameraId() {
+        if( preview == null || preview.getCameraControllerManager() == null )
+            return -1;
+        CameraControllerManager manager = preview.getCameraControllerManager();
+        int n_cameras = manager.getNumberOfCameras();
+        int currCameraId = getActualCameraId();
+        CameraController.Facing curr_facing = manager.getFacing(currCameraId);
+        for(int i=0;i<n_cameras;i++) {
+            if( manager.getFacing(i) != curr_facing )
+                continue;
+            if( !isCameraUltraWide(i) )
+                return i;
+        }
+        return -1;
+    }
+
+    /** Whether the 0.5x/1x zoom-ratio icon should be shown. Only when the current facing has an
+     *  ultra-wide camera available. */
+    public boolean showZoomRatioIcon() {
+        if( preview == null || preview.getCameraControllerManager() == null )
+            return false;
+        if( preview.getCameraControllerManager().getNumberOfCameras() < 2 )
+            return false;
+        int currCameraId = getActualCameraId();
+        // show if the current camera is ultra-wide, or if there is an ultra-wide camera we could switch to
+        return isCameraUltraWide(currCameraId) || getUltraWideCameraId() != -1;
+    }
+
+    /** Updates the label ("0.5x" or "1x") of the zoom-ratio button to match the current camera. */
+    public void updateZoomRatioButton() {
+        TextView zoomRatioButton = findViewById(R.id.zoom_ratio);
+        if( zoomRatioButton == null )
+            return;
+        int currCameraId = getActualCameraId();
+        if( isCameraUltraWide(currCameraId) ) {
+            // currently on ultra-wide, so tapping will go back to 1x
+            zoomRatioButton.setText(R.string.zoom_ratio_1x);
+        }
+        else {
+            // on the main camera, so tapping will go to 0.5x (if available)
+            zoomRatioButton.setText(R.string.zoom_ratio_05x);
+        }
+    }
+
+    /** RenCam: called when the user taps the 0.5x/1x zoom-ratio button. Switches between the main
+     *  camera and the ultra-wide camera (if the device has one). */
+    public void clickedZoomRatio(View view) {
+        if( MyDebug.LOG )
+            Log.d(TAG, "clickedZoomRatio");
+        if( preview == null || preview.isOpeningCamera() )
+            return;
+        if( !preview.canSwitchCamera() )
+            return;
+        this.closePopup();
+        int currCameraId = getActualCameraId();
+        int targetCameraId;
+        if( isCameraUltraWide(currCameraId) ) {
+            targetCameraId = getMainCameraId();
+            if( targetCameraId == -1 )
+                targetCameraId = currCameraId;
+            this.push_info_toast_text = getResources().getString(R.string.zoom_ratio_switch_main);
+        }
+        else {
+            targetCameraId = getUltraWideCameraId();
+            if( targetCameraId == -1 ) {
+                // no ultra-wide camera for this facing - shouldn't happen as the button is hidden
+                preview.showToast(null, R.string.zoom_ratio_unavailable, true);
+                return;
+            }
+            this.push_info_toast_text = getResources().getString(R.string.zoom_ratio_switch_ultrawide);
+        }
+        if( targetCameraId != currCameraId ) {
+            userSwitchToCamera(targetCameraId);
+        }
     }
 
     /** Whether user preference is set to allow long press actions.

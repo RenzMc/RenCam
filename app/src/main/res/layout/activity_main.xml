@@ -56,6 +56,25 @@
         android:visibility="gone"
         />
 
+    <!-- RenCam: 0.5x / 1x zoom-ratio toggle. Only made visible when the device has an
+         ultra-wide camera for the current facing (see MainActivity.showZoomRatioIcon()). -->
+    <TextView
+        android:id="@+id/zoom_ratio"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:gravity="center"
+        android:textColor="#ffffffff"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:text="@string/zoom_ratio_1x"
+        android:contentDescription="@string/zoom_ratio"
+        android:onClick="clickedZoomRatio"
+        android:background="@drawable/circle_background"
+        android:backgroundTint="@color/icons_background_tint"
+        android:backgroundTintMode="src_in"
+        android:visibility="gone"
+        />
+
     <ImageButton
         android:id="@+id/pause_video"
         android:layout_width="70dp"

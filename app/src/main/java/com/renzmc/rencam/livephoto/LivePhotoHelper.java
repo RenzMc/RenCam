@@ -51,6 +51,48 @@ public final class LivePhotoHelper {
         // no instances
     }
 
+    /**
+     * Result of a {@link #trimVideo} operation.
+     *
+     * <p>{@code startMs} is the timestamp <b>in the source video</b> that corresponds to time 0 in
+     * the trimmed output. Trimming seeks to the nearest keyframe, which is usually a little before
+     * the requested start, so the caller needs this value to map a source timestamp (for example
+     * the shutter / flash moment) onto the trimmed clip's timeline. Getting this wrong is why the
+     * still frame used to land at a random point instead of exactly on the flash.</p>
+     */
+    public static final class TrimResult {
+        public final boolean success;
+        public final long startMs;
+        public TrimResult(boolean success, long startMs) {
+            this.success = success;
+            this.startMs = startMs;
+        }
+    }
+
+    /**
+     * Returns whether the given file actually contains an embedded MP4 (i.e. it is a real Motion
+     * Photo). Used to verify the packaged output before it replaces the plain still, so that a
+     * failed packaging can never leave the user with a plain JPEG.
+     */
+    public static boolean containsEmbeddedVideo(File file) {
+        if (file == null || !file.exists() || file.length() < 100) {
+            return false;
+        }
+        try (InputStream in = new java.io.FileInputStream(file)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                if (findSubarray(buffer, FTYP) != -1) {
+                    return true;
+                }
+            }
+        }
+        catch (Exception e) {
+            Log.e(TAG, "Error checking for embedded video", e);
+        }
+        return false;
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Packaging (JPEG + MP4 -> Motion Photo JPEG)
     // ---------------------------------------------------------------------------------------------
@@ -492,9 +534,10 @@ public final class LivePhotoHelper {
      * @param outputFile destination MP4
      * @param startMs    start time in milliseconds
      * @param endMs      end time in milliseconds
-     * @return true on success (falls back to copying the whole file on failure)
+     * @return a {@link TrimResult} describing success and the source timestamp that maps to output
+     *         time 0 (falls back to copying the whole file on failure)
      */
-    public static boolean trimVideo(Context context, Uri inputUri, File outputFile,
+    public static TrimResult trimVideo(Context context, Uri inputUri, File outputFile,
                                     long startMs, long endMs) {
         MediaExtractor extractor = new MediaExtractor();
         MediaMuxer muxer = null;
@@ -509,7 +552,7 @@ public final class LivePhotoHelper {
             else {
                 parcelFd = context.getContentResolver().openFileDescriptor(inputUri, "r");
                 if (parcelFd == null) {
-                    return false;
+                    return new TrimResult(false, 0L);
                 }
                 pfd = parcelFd.getFileDescriptor();
                 extractor.setDataSource(pfd);
@@ -599,8 +642,12 @@ public final class LivePhotoHelper {
             if (parcelFd != null) {
                 parcelFd.close();
             }
-            Log.d(TAG, "Trimming video succeeded! Start: " + startMs + " ms, End: " + endMs + " ms");
-            return true;
+            Log.d(TAG, "Trimming video succeeded! Start: " + startMs + " ms, End: " + endMs
+                    + " ms, output start maps to source " + (Math.max(0L, baseUs) / 1000L) + " ms");
+            // baseUs is the timestamp (in the source) of the first keyframe actually written, which
+            // is what output time 0 corresponds to. The caller uses this to place the still frame
+            // exactly on the flash moment.
+            return new TrimResult(true, Math.max(0L, baseUs) / 1000L);
         } catch (Exception e) {
             Log.e(TAG, "Error trimming video", e);
             // fallback: copy the whole file
@@ -614,9 +661,9 @@ public final class LivePhotoHelper {
                     }
                 }
                 Log.d(TAG, "Trim failed but fallback copied full file");
-                return true;
+                return new TrimResult(true, 0L);
             } catch (Exception e2) {
-                return false;
+                return new TrimResult(false, 0L);
             }
         } finally {
             try {
@@ -640,10 +687,10 @@ public final class LivePhotoHelper {
      * Convenience overload of {@link #trimVideo(Context, Uri, File, long, long)} for a plain input
      * file (the Live Photo buffer is always recorded to a file in the cache directory).
      */
-    public static boolean trimVideo(Context context, File inputFile, File outputFile,
+    public static TrimResult trimVideo(Context context, File inputFile, File outputFile,
                                     long startMs, long endMs) {
         if (inputFile == null || !inputFile.exists()) {
-            return false;
+            return new TrimResult(false, 0L);
         }
         return trimVideo(context, Uri.fromFile(inputFile), outputFile, startMs, endMs);
     }

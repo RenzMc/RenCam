@@ -640,6 +640,22 @@ public class MainUI {
             view.setLayoutParams(layoutParams);
             setViewRotation(view, ui_rotation);
 
+            // RenCam: 0.5x/1x zoom-ratio toggle - placed to the LEFT of the shutter button
+            // (ui_independent_below == LEFT_OF in portrait), vertically aligned with it.
+            view = main_activity.findViewById(R.id.zoom_ratio);
+            layoutParams = (RelativeLayout.LayoutParams)view.getLayoutParams();
+            layoutParams.addRule(align_parent_left, 0);
+            layoutParams.addRule(align_parent_right, RelativeLayout.TRUE);
+            layoutParams.addRule(align_parent_top, 0);
+            layoutParams.addRule(align_parent_bottom, 0);
+            layoutParams.addRule(ui_independent_above, 0);
+            layoutParams.addRule(ui_independent_below, R.id.take_photo);
+            layoutParams.addRule(ui_independent_left_of, 0);
+            layoutParams.addRule(ui_independent_right_of, 0);
+            setMarginsForSystemUI(layoutParams, 0, 0, navigation_gap, 0);
+            view.setLayoutParams(layoutParams);
+            setViewRotation(view, ui_rotation);
+
             view = main_activity.findViewById(R.id.pause_video);
             layoutParams = (RelativeLayout.LayoutParams)view.getLayoutParams();
             layoutParams.addRule(align_parent_left, 0);
@@ -1367,6 +1383,7 @@ public class MainUI {
                 // n.b., don't hide share and trash buttons, as they require immediate user input for us to continue
                 View switchCameraButton = main_activity.findViewById(R.id.switch_camera);
                 View switchMultiCameraButton = main_activity.findViewById(R.id.switch_multi_camera);
+                View zoomRatioButton = main_activity.findViewById(R.id.zoom_ratio);
                 View switchVideoButton = main_activity.findViewById(R.id.switch_video);
                 View livePhotoIndicator = main_activity.findViewById(R.id.live_photo_indicator);
                 View exposureButton = main_activity.findViewById(R.id.exposure);
@@ -1391,6 +1408,12 @@ public class MainUI {
                     switchCameraButton.setVisibility(visibility);
                 if( main_activity.showSwitchMultiCamIcon() )
                     switchMultiCameraButton.setVisibility(visibility);
+                if( main_activity.showZoomRatioIcon() ) {
+                    zoomRatioButton.setVisibility(visibility);
+                    main_activity.updateZoomRatioButton();
+                }
+                else
+                    zoomRatioButton.setVisibility(View.GONE);
                 switchVideoButton.setVisibility(visibility);
                 if( immersive_mode )
                     livePhotoIndicator.setVisibility(View.GONE);
@@ -1496,6 +1519,7 @@ public class MainUI {
                 final int visibility_video = is_panorama_recording ? View.GONE : show_gui_photo ? View.VISIBLE : View.GONE; // for UI that is only hidden while taking photo
                 View switchCameraButton = main_activity.findViewById(R.id.switch_camera);
                 View switchMultiCameraButton = main_activity.findViewById(R.id.switch_multi_camera);
+                View zoomRatioButton = main_activity.findViewById(R.id.zoom_ratio);
                 View switchVideoButton = main_activity.findViewById(R.id.switch_video);
                 View exposureButton = main_activity.findViewById(R.id.exposure);
                 View exposureLockButton = main_activity.findViewById(R.id.exposure_lock);
@@ -1513,6 +1537,12 @@ public class MainUI {
                     switchCameraButton.setVisibility(visibility);
                 if( main_activity.showSwitchMultiCamIcon() )
                     switchMultiCameraButton.setVisibility(visibility);
+                if( main_activity.showZoomRatioIcon() ) {
+                    zoomRatioButton.setVisibility(visibility);
+                    main_activity.updateZoomRatioButton();
+                }
+                else
+                    zoomRatioButton.setVisibility(View.GONE);
                 switchVideoButton.setVisibility(visibility);
                 if( main_activity.supportsExposureButton() )
                     exposureButton.setVisibility(visibility_video); // still allow exposure when recording video

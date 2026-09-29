@@ -62,11 +62,18 @@ public class LivePhotoManager {
     public static final int POST_MS = 1500;
     public static final int TOTAL_MS = PRE_MS + POST_MS; // 3000
 
-    /** How long the flash burst stays on (a fraction of a second - never the whole clip). */
-    private static final int FLASH_BURST_MS = 700;
     /**
-     * How long after the shutter the cover frame is taken. The LED needs a moment to reach full
-     * brightness, so sampling slightly after the shutter gives a properly lit key photo.
+     * Apple-style flash burst timings, measured in milliseconds after the shutter. The burst is a
+     * short pre-flash (for metering / eye adaptation) followed by the main flash - the same
+     * "double blink" an iPhone does. The still frame is sampled during the main flash, so the key
+     * photo is always taken exactly at the moment the scene is lit.
+     */
+    private static final int FLASH_PRE_MS = 80;         // pre-flash ends
+    private static final int FLASH_MAIN_START_MS = 150; // main flash starts
+    private static final int FLASH_BURST_MS = 700;      // main flash ends
+    /**
+     * How long after the shutter the cover frame is taken. This is inside the main flash window
+     * (FLASH_MAIN_START_MS .. FLASH_BURST_MS), so the still is always lit by the flash.
      */
     private static final int COVER_DELAY_MS = 250;
     /**
@@ -104,13 +111,18 @@ public class LivePhotoManager {
     private long shutter_offset_ms;
 
     private Runnable post_roll_runnable;
-    private Runnable flash_off_runnable;
+    /** Adaptive post-roll used for the current capture (ms after the shutter). */
+    private long post_roll_ms = POST_MS;
+    /** Pending flash-burst steps, so they can all be cancelled if the capture is aborted. */
+    private final java.util.List<Runnable> flash_runnables = new java.util.ArrayList<>();
 
     // ---- Flash state -----------------------------------------------------------------------------
     /** The flash value that was active before we forced a torch, so we can restore it afterwards. */
     private String flash_value_before_capture = null;
     /** True if we turned on the front-screen flash (bright white screen) for the current burst. */
     private boolean used_screen_flash = false;
+    /** True if the current burst uses the front screen instead of an LED. */
+    private boolean flash_use_screen = false;
 
     public LivePhotoManager(Context context, SharedPreferences sharedPreferences, Preview preview) {
         this.context = context;
@@ -326,7 +338,14 @@ public class LivePhotoManager {
         if( MyDebug.LOG )
             Log.d(TAG, "shutter_offset_ms: " + shutter_offset_ms);
 
-        // Flash: a short burst only around the still (never a continuous torch for the whole clip).
+        // Reset any leftover flash state from a previous capture (e.g. after switching cameras), so
+        // the flash can never be left "stuck" and always fires for this shot.
+        flash_value_before_capture = null;
+        used_screen_flash = false;
+        flash_use_screen = false;
+
+        // Flash: a short Apple-style burst only around the still (never a continuous torch for the
+        // whole clip).
         boolean front = host != null && host.isFrontFacing();
         startFlashBurst(front);
 
@@ -342,15 +361,11 @@ public class LivePhotoManager {
             host.showToast(R.string.live_photo_hold_steady);
         }
 
-        // Schedule the end of the flash burst and the end of the post-roll.
-        flash_off_runnable = new Runnable() {
-            @Override
-            public void run() {
-                flash_off_runnable = null;
-                stopFlashBurst();
-            }
-        };
-        handler.postDelayed(flash_off_runnable, FLASH_BURST_MS);
+        // Adaptive post-roll: keep the total clip at exactly 3s even when the shutter is pressed
+        // very soon after the buffer (re)starts, so the Live Photo is never too short.
+        post_roll_ms = Math.min(TOTAL_MS, POST_MS + Math.max(0L, PRE_MS - shutter_offset_ms));
+        if( MyDebug.LOG )
+            Log.d(TAG, "post_roll_ms: " + post_roll_ms);
 
         post_roll_runnable = new Runnable() {
             @Override
@@ -358,7 +373,7 @@ public class LivePhotoManager {
                 onPostRollElapsed();
             }
         };
-        handler.postDelayed(post_roll_runnable, POST_MS);
+        handler.postDelayed(post_roll_runnable, post_roll_ms);
         return true;
     }
 
@@ -373,13 +388,11 @@ public class LivePhotoManager {
         capturing = false;
 
         // Make sure the flash is off before we stop.
-        if( flash_off_runnable != null ) {
-            handler.removeCallbacks(flash_off_runnable);
-            flash_off_runnable = null;
-        }
+        cancelFlashSteps();
         stopFlashBurst();
 
         final long offset_ms = shutter_offset_ms;
+        final long post_roll = post_roll_ms;
         // Stop the buffer (this reconnects the camera and restarts the normal preview).
         final File video_file = preview != null ? preview.stopLivePhotoBuffer(true) : null;
         buffer_running = false;
@@ -401,7 +414,7 @@ public class LivePhotoManager {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                processCapturedVideo(video_file, offset_ms);
+                processCapturedVideo(video_file, offset_ms, post_roll);
             }
         }, "LivePhotoProcessor").start();
     }
@@ -410,36 +423,40 @@ public class LivePhotoManager {
      * Trims the recorded buffer down to the {@code [shutter-1.5s, shutter+1.5s]} window, extracts the
      * cover frame at the shutter timestamp, and hands it to the host to be saved.
      */
-    private void processCapturedVideo(File video_file, long offset_ms) {
+    private void processCapturedVideo(File video_file, long offset_ms, long post_roll_ms) {
         long duration = LivePhotoHelper.getVideoDuration(context, Uri.fromFile(video_file));
         if( duration <= 0 ) {
             // Fall back to the elapsed buffer time if the container didn't report a duration.
-            duration = offset_ms + POST_MS;
+            duration = offset_ms + post_roll_ms;
         }
 
         long window_start = Math.max(0L, offset_ms - PRE_MS);
-        long window_end = Math.min(duration, offset_ms + POST_MS);
+        long window_end = Math.min(duration, offset_ms + post_roll_ms);
         if( window_end <= window_start ) {
             window_end = Math.min(duration, window_start + TOTAL_MS);
         }
 
         File trimmed_file = new File(context.getCacheDir(),
                 "rencam_live_trim_" + System.currentTimeMillis() + ".mp4");
-        boolean trimmed = LivePhotoHelper.trimVideo(context, video_file, trimmed_file, window_start, window_end);
-        File source = (trimmed && trimmed_file.exists() && trimmed_file.length() > 100) ? trimmed_file : video_file;
-        if( source == video_file ) {
-            // Trimming failed - use the whole clip, so the cover offset must be relative to its start,
-            // and discard the (empty/partial) trim output.
-            window_start = 0L;
-            deleteQuietly(trimmed_file);
-        }
-        else {
+        LivePhotoHelper.TrimResult trim = LivePhotoHelper.trimVideo(context, video_file, trimmed_file, window_start, window_end);
+        boolean trimmed = trim.success && trimmed_file.exists() && trimmed_file.length() > 100;
+        File source = trimmed ? trimmed_file : video_file;
+        // The source timestamp that corresponds to time 0 in `source`. Trimming seeks to the nearest
+        // keyframe (usually a little before window_start), so the trimmed clip's timeline is offset
+        // by this amount - without it the still would land at a random point instead of on the flash.
+        long source_start_ms = trimmed ? trim.startMs : 0L;
+        if( trimmed ) {
             // Trimming succeeded - the trimmed file is the one we keep, so the raw buffer can go now.
             deleteQuietly(video_file);
         }
+        else {
+            // Trimming failed - use the whole clip, and discard the (empty/partial) trim output.
+            deleteQuietly(trimmed_file);
+        }
 
-        // The cover frame is taken at the shutter moment (plus a small delay so the flash has lit it).
-        long cover_ms = (offset_ms - window_start) + COVER_DELAY_MS;
+        // The cover frame is taken at the shutter moment plus a small delay so the flash has lit it,
+        // mapped onto the trimmed clip's timeline using the actual trim start.
+        long cover_ms = (offset_ms + COVER_DELAY_MS) - source_start_ms;
         long cover_duration = LivePhotoHelper.getVideoDuration(context, Uri.fromFile(source));
         if( cover_duration > 0 && cover_ms >= cover_duration ) {
             cover_ms = Math.max(0L, cover_duration - 50L);
@@ -551,10 +568,7 @@ public class LivePhotoManager {
             handler.removeCallbacks(post_roll_runnable);
             post_roll_runnable = null;
         }
-        if( flash_off_runnable != null ) {
-            handler.removeCallbacks(flash_off_runnable);
-            flash_off_runnable = null;
-        }
+        cancelFlashSteps();
         cancelBufferCap();
         capturing = false;
         waiting_for_cover = false;
@@ -605,7 +619,10 @@ public class LivePhotoManager {
     private void packageIntoFile(File still_file, File video_file, long presentation_us) {
         File output = new File(still_file.getParentFile(), still_file.getName() + ".live.tmp");
         boolean ok = LivePhotoHelper.packageMotionPhoto(still_file, video_file, output, presentation_us);
-        if( ok && output.exists() ) {
+        // Verify the output really contains the embedded MP4 before it replaces the plain still, so
+        // a failed packaging can never leave the user with a plain JPEG that isn't a Live Photo.
+        ok = ok && output.exists() && LivePhotoHelper.containsEmbeddedVideo(output);
+        if( ok ) {
             // Replace the plain JPEG with the Motion Photo (JPEG + embedded MP4 + XMP).
             if( still_file.delete() ) {
                 if( output.renameTo(still_file) ) {
@@ -640,7 +657,9 @@ public class LivePhotoManager {
             output = new File(context.getCacheDir(),
                     "rencam_live_pkg_" + System.currentTimeMillis() + ".jpg");
             boolean ok = LivePhotoHelper.packageMotionPhoto(coverBytes, video_file, output, presentation_us);
-            if( ok && output.exists() ) {
+            // Verify the packaged file really contains the embedded MP4 before writing it back.
+            ok = ok && output.exists() && LivePhotoHelper.containsEmbeddedVideo(output);
+            if( ok ) {
                 long new_size = output.length();
                 if( LivePhotoHelper.writeFileToUri(context, output, still_uri) ) {
                     if( MyDebug.LOG )
@@ -704,13 +723,16 @@ public class LivePhotoManager {
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * Fires a short flash burst for the still. For the front camera without an LED this lights the
-     * screen bright white; otherwise the LED is turned on as a torch. In both cases the flash is only
-     * on for {@link #FLASH_BURST_MS} - it is <b>not</b> left on for the whole clip.
+     * Fires an Apple-style flash burst for the still: a short pre-flash, a brief gap, then the main
+     * flash - the "double blink" an iPhone does. For the front camera without an LED this lights the
+     * screen bright white; otherwise the LED is driven as a torch. The burst is only on for a
+     * fraction of a second around the still - it is <b>not</b> left on for the whole clip.
      */
     private void startFlashBurst(boolean front) {
         String behavior = getFlashBehavior();
         if( "off".equals(behavior) ) {
+            if( MyDebug.LOG )
+                Log.d(TAG, "flash burst disabled by preference");
             return;
         }
         CameraController controller = preview != null ? preview.getCameraController() : null;
@@ -720,28 +742,74 @@ public class LivePhotoManager {
         if( front && !has_led ) {
             // The front camera has no LED flash, so we use the "front screen flash": the screen is
             // lit up bright white (with a glow around the edges) for the burst.
-            if( host != null ) {
-                if( MyDebug.LOG )
-                    Log.d(TAG, "front screen flash burst on");
-                host.turnFrontScreenFlashOn();
-                used_screen_flash = true;
-            }
+            flash_use_screen = true;
+            flash_value_before_capture = null;
+        }
+        else if( controller != null && has_led ) {
+            // Back camera (or a front camera that does have an LED): drive the LED as a torch.
+            flash_use_screen = false;
+            flash_value_before_capture = current;
+        }
+        else {
+            if( MyDebug.LOG )
+                Log.d(TAG, "no flash available for this camera");
             return;
         }
 
-        if( controller != null && has_led ) {
-            if( flash_value_before_capture == null ) {
-                flash_value_before_capture = current;
+        if( MyDebug.LOG )
+            Log.d(TAG, "flash burst: screen=" + flash_use_screen + " has_led=" + has_led);
+
+        // Pre-flash, tiny gap, main flash, then off - the "double blink" of an iPhone.
+        scheduleFlashStep(0, true);
+        scheduleFlashStep(FLASH_PRE_MS, false);
+        scheduleFlashStep(FLASH_MAIN_START_MS, true);
+        scheduleFlashStep(FLASH_BURST_MS, false);
+    }
+
+    /** Schedules one on/off step of the flash burst. */
+    private void scheduleFlashStep(long delay_ms, final boolean on) {
+        Runnable r = new Runnable() {
+            @Override
+            public void run() {
+                setFlashHardware(on);
             }
-            if( MyDebug.LOG )
-                Log.d(TAG, "LED flash burst on");
+        };
+        flash_runnables.add(r);
+        handler.postDelayed(r, delay_ms);
+    }
+
+    /** Actually turns the LED torch / front screen on or off. */
+    private void setFlashHardware(boolean on) {
+        if( flash_use_screen ) {
+            if( host != null ) {
+                if( on ) {
+                    host.turnFrontScreenFlashOn();
+                    used_screen_flash = true;
+                }
+                else {
+                    host.turnFrontScreenFlashOff();
+                    used_screen_flash = false;
+                }
+            }
+            return;
+        }
+        CameraController controller = preview != null ? preview.getCameraController() : null;
+        if( controller != null ) {
             try {
-                controller.setFlashValue("flash_torch");
+                controller.setFlashValue(on ? "flash_torch" : "flash_off");
             }
             catch(Exception e) {
-                Log.e(TAG, "failed to turn on flash burst", e);
+                Log.e(TAG, "failed to set flash burst state", e);
             }
         }
+    }
+
+    /** Cancels any pending flash-burst steps. */
+    private void cancelFlashSteps() {
+        for( Runnable r : flash_runnables ) {
+            handler.removeCallbacks(r);
+        }
+        flash_runnables.clear();
     }
 
     /**
@@ -749,6 +817,7 @@ public class LivePhotoManager {
      * burst duration has elapsed (or when aborting).
      */
     private void stopFlashBurst() {
+        cancelFlashSteps();
         if( used_screen_flash && host != null ) {
             host.turnFrontScreenFlashOff();
             used_screen_flash = false;
@@ -765,6 +834,7 @@ public class LivePhotoManager {
             }
         }
         flash_value_before_capture = null;
+        flash_use_screen = false;
     }
 
     // ---------------------------------------------------------------------------------------------
