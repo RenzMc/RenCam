@@ -129,6 +129,12 @@ public class LivePhotoManager {
     private boolean used_screen_flash = false;
     /** True if the current burst uses the front screen instead of an LED. */
     private boolean flash_use_screen = false;
+    /**
+     * True if a flash burst actually fired for the current capture. When it did, the flash is used
+     * as a visual sync mark so the still is always sampled from the lit frame (see
+     * {@link #extractCoverJpegSynced}).
+     */
+    private boolean flash_fired = false;
 
     public LivePhotoManager(Context context, SharedPreferences sharedPreferences, Preview preview) {
         this.context = context;
@@ -187,7 +193,12 @@ public class LivePhotoManager {
     public synchronized void onPreviewStarted() {
         if( MyDebug.LOG )
             Log.d(TAG, "onPreviewStarted");
-        startBuffer();
+        if( !startBuffer() ) {
+            // The camera is sometimes not quite ready the instant the preview reports as started (and
+            // the buffer can fail for other transient reasons too). Retry a few times so Live Photo is
+            // ready by the time the user presses the shutter - this is what makes capture reliable.
+            scheduleBufferRestart(8);
+        }
     }
 
     /** Stops the continuous background video buffer (e.g. the preview is stopping). */
@@ -198,6 +209,22 @@ public class LivePhotoManager {
         if( buffer_running ) {
             // The preview is stopping, so don't reconnect the camera here.
             File file = preview != null ? preview.stopLivePhotoBuffer(false) : null;
+            deleteQuietly(file);
+            buffer_running = false;
+            buffer_file = null;
+        }
+    }
+
+    /**
+     * Stops the buffer <b>and reconnects the camera</b> so the normal preview continues. Used when
+     * Live Photo is switched off while the preview is still running (e.g. via the LIVE badge).
+     */
+    public synchronized void stopBufferAndReconnect() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "stopBufferAndReconnect");
+        cancelBufferCap();
+        if( buffer_running ) {
+            File file = preview != null ? preview.stopLivePhotoBuffer(true) : null;
             deleteQuietly(file);
             buffer_running = false;
             buffer_file = null;
@@ -334,13 +361,23 @@ public class LivePhotoManager {
         }
 
         // The buffer should already be running (started when the preview started). If for some reason
-        // it isn't, start one now - the clip will simply have less (or no) motion before the shutter.
+        // it isn't, try to start one now. If it still can't start (for example the camera session
+        // doesn't support video recording), DON'T swallow the shutter: fall back to a normal still so
+        // the user always gets a photo instead of nothing.
         if( !buffer_running ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "buffer not running - starting one now");
             startBuffer();
+            if( !buffer_running ) {
+                if( MyDebug.LOG )
+                    Log.d(TAG, "buffer unavailable - falling back to a normal photo");
+                if( host != null ) {
+                    host.showToast(R.string.live_photo_buffer_unavailable);
+                }
+                return false;
+            }
         }
-        shutter_offset_ms = buffer_running ? (SystemClock.elapsedRealtime() - buffer_start_ms) : 0L;
+        shutter_offset_ms = SystemClock.elapsedRealtime() - buffer_start_ms;
         if( MyDebug.LOG )
             Log.d(TAG, "shutter_offset_ms: " + shutter_offset_ms);
 
@@ -349,6 +386,7 @@ public class LivePhotoManager {
         flash_value_before_capture = null;
         used_screen_flash = false;
         flash_use_screen = false;
+        flash_fired = false;
 
         // Flash: a short Apple-style burst only around the still (never a continuous torch for the
         // whole clip).
@@ -401,6 +439,7 @@ public class LivePhotoManager {
 
         final long offset_ms = shutter_offset_ms;
         final long post_roll = post_roll_ms;
+        final boolean flash_used = flash_fired;
         // Stop the buffer (this reconnects the camera and restarts the normal preview).
         final File video_file = preview != null ? preview.stopLivePhotoBuffer(true) : null;
         buffer_running = false;
@@ -422,7 +461,7 @@ public class LivePhotoManager {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                processCapturedVideo(video_file, offset_ms, post_roll);
+                processCapturedVideo(video_file, offset_ms, post_roll, flash_used);
             }
         }, "LivePhotoProcessor").start();
     }
@@ -431,7 +470,7 @@ public class LivePhotoManager {
      * Trims the recorded buffer down to the {@code [shutter-1.5s, shutter+1.5s]} window, extracts the
      * cover frame at the shutter timestamp, and hands it to the host to be saved.
      */
-    private void processCapturedVideo(File video_file, long offset_ms, long post_roll_ms) {
+    private void processCapturedVideo(File video_file, long offset_ms, long post_roll_ms, boolean flash_used) {
         long duration = LivePhotoHelper.getVideoDuration(context, Uri.fromFile(video_file));
         if( duration <= 0 ) {
             // Fall back to the elapsed buffer time if the container didn't report a duration.
@@ -473,7 +512,7 @@ public class LivePhotoManager {
             cover_ms = 0L;
         }
 
-        final byte[] cover = extractCoverJpeg(source, cover_ms, getTargetStillAspectRatio());
+        final byte[] cover = extractCoverJpegSynced(source, cover_ms, getTargetStillAspectRatio(), flash_used);
         if( cover == null ) {
             Log.e(TAG, "failed to extract cover frame from live photo video");
             deleteQuietly(source);
@@ -526,6 +565,101 @@ public class LivePhotoManager {
         finally {
             bitmap.recycle();
         }
+    }
+
+    /**
+     * Extracts the cover frame for a Live Photo, <b>synced to the flash</b> when one fired.
+     *
+     * <p>Why this matters: the continuous video buffer's timeline can drift a little from wall-clock
+     * time (MediaRecorder doesn't start writing on the exact millisecond, and old devices drop the odd
+     * frame). Because the still is sampled from the video at a computed offset, that drift used to
+     * make the still land on the flash sometimes and miss it other times - the "sometimes perfect,
+     * sometimes random" timing. The flash burst gives us a reliable visual sync mark: the frame that
+     * is lit by the flash is (by definition) the brightest one, so we look for the brightest frame in
+     * a small window around the expected shutter time and use that as the still. The result is a still
+     * that is always taken at the exact moment the scene was lit - consistent, like an iPhone.</p>
+     *
+     * <p>When no flash fired (flash set to off, or a camera with no light) we simply use the expected
+     * time, since there is no sync mark to look for.</p>
+     */
+    private byte[] extractCoverJpegSynced(File video_file, long expected_ms, double target_aspect_ratio, boolean flash_used) {
+        long chosen_ms = expected_ms;
+        if( flash_used ) {
+            long flash_ms = findFlashFrameMs(video_file, expected_ms);
+            if( flash_ms >= 0 ) {
+                chosen_ms = flash_ms;
+                if( MyDebug.LOG )
+                    Log.d(TAG, "flash-synced cover: expected " + expected_ms + "ms, chose " + chosen_ms + "ms");
+            }
+        }
+        return extractCoverJpeg(video_file, chosen_ms, target_aspect_ratio);
+    }
+
+    /**
+     * Finds the timestamp (ms) of the brightest frame in a small window around the expected shutter
+     * time - i.e. the frame lit by the flash burst. Returns -1 if no frame could be sampled.
+     */
+    private long findFlashFrameMs(File video_file, long expected_ms) {
+        // The flash burst lights the scene from about 150ms to 700ms after the shutter, and the still
+        // is expected a little after the shutter; search a window that comfortably covers that (plus a
+        // little slack for timeline drift).
+        final long window_before = 150L;
+        final long window_after = 550L;
+        final long step = 70L;
+        Uri uri = Uri.fromFile(video_file);
+        long duration = LivePhotoHelper.getVideoDuration(context, uri);
+        long start = Math.max(0L, expected_ms - window_before);
+        long end = expected_ms + window_after;
+        if( duration > 0 && end > duration - 1 ) {
+            end = duration - 1;
+        }
+        if( end <= start ) {
+            return -1L;
+        }
+        long best_ms = -1L;
+        double best_brightness = -1.0;
+        for( long t = start; t <= end; t += step ) {
+            Bitmap frame = LivePhotoHelper.extractVideoFrame(context, uri, t);
+            if( frame == null ) {
+                continue;
+            }
+            double brightness;
+            try {
+                brightness = averageBrightness(frame);
+            }
+            finally {
+                frame.recycle();
+            }
+            if( brightness > best_brightness ) {
+                best_brightness = brightness;
+                best_ms = t;
+            }
+        }
+        return best_ms;
+    }
+
+    /** Average luminance (0..255) of a bitmap, sampled on a coarse grid so it is cheap. */
+    private double averageBrightness(Bitmap bitmap) {
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+        if( w <= 0 || h <= 0 ) {
+            return 0.0;
+        }
+        int step_x = Math.max(1, w / 32);
+        int step_y = Math.max(1, h / 32);
+        long sum = 0L;
+        int count = 0;
+        for( int y = 0; y < h; y += step_y ) {
+            for( int x = 0; x < w; x += step_x ) {
+                int c = bitmap.getPixel(x, y);
+                int r = (c >> 16) & 0xFF;
+                int g = (c >> 8) & 0xFF;
+                int b = c & 0xFF;
+                sum += (r + g + b) / 3;
+                count++;
+            }
+        }
+        return count > 0 ? (double) sum / (double) count : 0.0;
     }
 
     /**
@@ -836,6 +970,8 @@ public class LivePhotoManager {
 
         if( MyDebug.LOG )
             Log.d(TAG, "flash burst: screen=" + flash_use_screen + " has_led=" + has_led);
+        // Remember that a flash actually fired, so the cover frame can be synced to it.
+        flash_fired = true;
 
         // Pre-flash, tiny gap, main flash, then off - the "double blink" of an iPhone.
         scheduleFlashStep(0, true);

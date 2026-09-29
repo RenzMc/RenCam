@@ -1200,6 +1200,19 @@ public class PopupView extends LinearLayout {
             }
             editor.apply();
 
+            // RenCam Live Photo: Live Photo records a short video buffer, which needs a camera session
+            // that supports video recording. Panorama and the Camera2 extension modes (X_*) don't, so
+            // when Live Photo is active those modes fall back to Standard capture - let the user know.
+            if( main_activity.getApplicationInterface().isLivePhotoActive()
+                    && ( new_photo_mode == MyApplicationInterface.PhotoMode.Panorama
+                        || new_photo_mode == MyApplicationInterface.PhotoMode.X_Auto
+                        || new_photo_mode == MyApplicationInterface.PhotoMode.X_HDR
+                        || new_photo_mode == MyApplicationInterface.PhotoMode.X_Night
+                        || new_photo_mode == MyApplicationInterface.PhotoMode.X_Bokeh
+                        || new_photo_mode == MyApplicationInterface.PhotoMode.X_Beauty ) ) {
+                main_activity.getPreview().showToast(null, R.string.live_photo_mode_fallback, true);
+            }
+
             boolean done_dialog = false;
             if( new_photo_mode == MyApplicationInterface.PhotoMode.HDR ) {
                 boolean done_hdr_info = sharedPreferences.contains(PreferenceKeys.HDRInfoPreferenceKey);

@@ -1,29 +1,34 @@
-# RenCam Live Photo — Fix Plan (round 2)
+# RenCam Live Photo — Fix Plan (round 3)
 
-## Masalah baru yang dilaporkan
-- [x] WhatsApp tidak bisa memutar penuh 3 detik — hanya "part flash" saja (TikTok bisa penuh).
-- [x] Foto Live diambil 9:16 (portrait) tapi hasilnya jadi 16:9 (landscape).
+## Masalah yang dilaporkan
+- [x] Live Photo mati kalau HDR / fitur bawaan kamera diaktifkan (X-HDR, X-Night, X-Bokeh, X-Beauty, Panorama).
+- [x] Timing kadang perfect kaya iPhone, kadang acak-acakan (tidak konsisten).
+- [x] Format file harus sesuai / setara iPhone.
+- [x] Cari 1 hal lain yang kurang dan perbaiki.
+- [x] Bikin README.md singkat & clean.
 
 ## Akar masalah (hasil investigasi)
-- [x] Filename Motion Photo HARUS diakhiri "MP" sebelum ekstensi (spec Google).
-      RenCam menamai `IMG_...jpg` -> WhatsApp (yang mengikuti spec) mengabaikan video.
-- [x] Saat trim video (MediaExtractor + MediaMuxer), rotasi video HILANG karena
-      MediaMuxer tidak memakai setOrientationHint -> video jadi landscape.
-- [x] Cover still diekstrak dari video tanpa menerapkan rotasi -> hasil 16:9.
-- [x] Durasi video buffer kadang < 3s (frame terakhir tidak ter-flush).
+- [x] Camera2 extension session (X_*) & Panorama memblokir perekaman video
+      (`BLOCK_FOR_EXTENSIONS()` melempar exception di `initVideoRecorderPrePrepare/PostPrepare`),
+      jadi buffer Live Photo gagal start -> Live Photo tidak jalan.
+- [x] Kalau buffer gagal start, shutter malah menghasilkan TIDAK ADA foto sama sekali
+      (shutter di-swallow, tidak fallback ke foto biasa).
+- [x] Buffer tidak pernah di-retry kalau gagal start -> Live Photo mati sampai preview restart.
+- [x] Timeline video bisa drift dari wall-clock -> cover frame kadang kena flash, kadang tidak.
 
 ## Rencana
-- [x] 1. Pertahankan rotasi saat trim (muxer.setOrientationHint) -> video portrait benar
-- [x] 2. Terapkan rotasi saat ekstrak cover frame -> still tidak lagi 16:9
-- [x] 3. Crop still ke aspect ratio foto (picture size) supaya cocok dengan preview
-- [x] 4. Tambah "MP" pada nama file Live Photo (spec Motion Photo)
-- [x] 5. Beri margin perekaman supaya durasi video selalu >= 3s
-- [x] 6. Build lokal (assembleDebug) -> verifikasi (BUILD SUCCESSFUL)
-- [x] 7. Push ke GitHub (commit 11c523e) + GitHub Actions build APK (run 36574733243 SUCCESS, artifact RenCam-APK 8.5 MB)
+- [x] 1. Paksa mode kamera yang kompatibel video saat Live Photo aktif (fallback ke Standard).
+- [x] 2. Retry start buffer kalau gagal.
+- [x] 3. Fallback ke foto biasa kalau buffer benar-benar tidak bisa jalan (jangan sampai no photo).
+- [x] 4. Jamin timing konsisten: cover frame di-sync ke flash (cari frame paling terang).
+- [x] 5. Verifikasi format Motion Photo sesuai spec (XMP + MP4 di akhir + nama "MP").
+- [x] 6. Build lokal (assembleDebug) -> BUILD SUCCESSFUL.
+- [x] 7. Push ke GitHub + GitHub Actions build APK.
+- [x] 8. README.md singkat & clean.
 
-## Catatan riset
+## "One more thing" (hal lain yang kurang)
+- [x] Lencana LIVE di viewfinder kini bisa di-tap untuk ON/OFF cepat (terang = aktif,
+      redup = nonaktif), tidak perlu masuk Pengaturan.
+
+## Catatan
 - Spec: https://developer.android.com/media/platform/motion-photo-format
-  - Filename regex: ^([^\s\/\\][^\/\\]*MP)\.(JPG|jpg|JPEG|jpeg|HEIC|heic|AVIF|avif)
-  - "Readers may ignore the XMP metadata, the appended video file, or the video
-    contents if the pattern is not followed."
-- WhatsApp mendukung Motion Photo (rollout Sep 2025) dan mengikuti spec.

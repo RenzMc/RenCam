@@ -5,6 +5,7 @@ import com.renzmc.rencam.cameracontroller.CameraController;
 import com.renzmc.rencam.MainActivity;
 import com.renzmc.rencam.MyDebug;
 import com.renzmc.rencam.PreferenceKeys;
+import com.renzmc.rencam.livephoto.LivePhotoManager;
 import com.renzmc.rencam.preview.ApplicationInterface;
 import com.renzmc.rencam.preview.Preview;
 import com.renzmc.rencam.R;
@@ -1148,18 +1149,53 @@ public class MainUI {
         updateLivePhotoIndicator();
     }
 
-    /** RenCam: shows the "LIVE" badge when Live Photo is enabled and we're in photo mode. */
+    /**
+     * RenCam: updates the "LIVE" badge. The badge is shown in photo mode whenever the device supports
+     * Live Photo - bright when the feature is on, dimmed when it's off - and it doubles as a quick
+     * on/off toggle: tapping it flips the setting without opening the settings screen.
+     */
     public void updateLivePhotoIndicator() {
         if( main_activity.getPreview() == null )
             return;
-        View indicator = main_activity.findViewById(R.id.live_photo_indicator);
+        final View indicator = main_activity.findViewById(R.id.live_photo_indicator);
         if( indicator == null )
             return;
-        boolean show = main_activity.getApplicationInterface().getLivePhotoManager().isEnabled()
-                && !main_activity.getPreview().isVideo();
+        final LivePhotoManager mgr = main_activity.getApplicationInterface().getLivePhotoManager();
+        final boolean supported = mgr.isSupported();
+        final boolean enabled = mgr.isEnabled();
+        final boolean in_photo_mode = !main_activity.getPreview().isVideo();
+        boolean show = supported && in_photo_mode;
         if( MyDebug.LOG )
-            Log.d(TAG, "updateLivePhotoIndicator: " + show);
+            Log.d(TAG, "updateLivePhotoIndicator: show=" + show + " enabled=" + enabled);
         indicator.setVisibility(show ? View.VISIBLE : View.GONE);
+        if( !show ) {
+            return;
+        }
+        // Bright when Live Photo is on, dimmed when it's off - so it also works as a quick toggle.
+        indicator.setAlpha(enabled ? 1.0f : 0.4f);
+        indicator.setContentDescription(main_activity.getResources().getString(
+                enabled ? R.string.live_photo_mode_active : R.string.live_photo_tap_to_enable));
+        indicator.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                boolean now = !mgr.isEnabled();
+                PreferenceManager.getDefaultSharedPreferences(main_activity).edit()
+                        .putBoolean(PreferenceKeys.LivePhotoEnablePreferenceKey, now).apply();
+                if( now ) {
+                    // Start the background video buffer straight away.
+                    mgr.onPreviewStarted();
+                }
+                else {
+                    // Stop the buffer and restore the normal preview session.
+                    mgr.stopBufferAndReconnect();
+                }
+                updateLivePhotoIndicator();
+                if( main_activity.getPreview() != null ) {
+                    main_activity.getPreview().showToast(null,
+                            now ? R.string.live_photo_enabled : R.string.live_photo_disabled, true);
+                }
+            }
+        });
     }
 
     /** Set content description for switch camera button.

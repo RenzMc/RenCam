@@ -211,6 +211,15 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
             Log.d(TAG, "MyApplicationInterface: total time to create MyApplicationInterface: " + (System.currentTimeMillis() - debug_time));
     }
 
+    /**
+     * Whether Live Photo capture is currently enabled and supported. Used to keep the camera in a
+     * configuration that supports video recording (Live Photo records a short video buffer), and to
+     * explain to the user when a photo mode has to be ignored because of it.
+     */
+    public boolean isLivePhotoActive() {
+        return getLivePhotoManager().isActive();
+    }
+
     /** Returns the RenCam Live Photo manager, creating it lazily on first use. */
     public LivePhotoManager getLivePhotoManager() {
         if( livePhotoManager == null ) {
@@ -1764,6 +1773,14 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         String photo_mode_pref = sharedPreferences.getString(PreferenceKeys.PhotoModePreferenceKey, "preference_photo_mode_std");
 		/*if( MyDebug.LOG )
 			Log.d(TAG, "photo_mode_pref: " + photo_mode_pref);*/
+        // RenCam Live Photo: Live Photo records a short video buffer, so the camera must be opened in
+        // a session that supports video recording. Two families of photo modes cannot do that:
+        //  * Panorama uses its own special capture flow;
+        //  * the "X_*" modes use a Camera2 extension session, and extensions reject video recording
+        //    (CameraController2.initVideoRecorderPre/PostPrepare() throw for extension sessions).
+        // When Live Photo is active we therefore fall back to Standard for those modes, so the shutter
+        // always produces a working Live Photo instead of failing.
+        boolean live_photo_active = isLivePhotoActive();
         boolean dro = photo_mode_pref.equals("preference_photo_mode_dro");
         if( dro && main_activity.supportsDRO() )
             return PhotoMode.DRO;
@@ -1783,22 +1800,22 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         if( noise_reduction && main_activity.supportsNoiseReduction() )
             return PhotoMode.NoiseReduction;
         boolean panorama = photo_mode_pref.equals("preference_photo_mode_panorama");
-        if( panorama && !main_activity.getPreview().isVideo() && main_activity.supportsPanorama() )
+        if( panorama && !live_photo_active && !main_activity.getPreview().isVideo() && main_activity.supportsPanorama() )
             return PhotoMode.Panorama;
         boolean x_auto = photo_mode_pref.equals("preference_photo_mode_x_auto");
-        if( x_auto && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_AUTOMATIC) )
+        if( x_auto && !live_photo_active && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_AUTOMATIC) )
             return PhotoMode.X_Auto;
         boolean x_hdr = photo_mode_pref.equals("preference_photo_mode_x_hdr");
-        if( x_hdr && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_HDR) )
+        if( x_hdr && !live_photo_active && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_HDR) )
             return PhotoMode.X_HDR;
         boolean x_night = photo_mode_pref.equals("preference_photo_mode_x_night");
-        if( x_night && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_NIGHT) )
+        if( x_night && !live_photo_active && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_NIGHT) )
             return PhotoMode.X_Night;
         boolean x_bokeh = photo_mode_pref.equals("preference_photo_mode_x_bokeh");
-        if( x_bokeh && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_BOKEH) )
+        if( x_bokeh && !live_photo_active && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_BOKEH) )
             return PhotoMode.X_Bokeh;
         boolean x_beauty = photo_mode_pref.equals("preference_photo_mode_x_beauty");
-        if( x_beauty && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_BEAUTY) )
+        if( x_beauty && !live_photo_active && !main_activity.getPreview().isVideo() && main_activity.supportsCameraExtension(CameraExtensionCharacteristics.EXTENSION_BEAUTY) )
             return PhotoMode.X_Beauty;
         return PhotoMode.Standard;
     }

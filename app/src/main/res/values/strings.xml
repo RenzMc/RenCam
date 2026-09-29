@@ -1099,6 +1099,7 @@
     <string name="live_photo_enabled">Live Photo enabled</string>
     <string name="live_photo_indicator">LIVE</string>
     <string name="live_photo_mode_active">Live Photo mode active</string>
+    <string name="live_photo_tap_to_enable">Tap to turn on Live Photo</string>
     <string name="swipe_to_switch_mode">Swipe the shutter button to switch between photo and video</string>
     <string name="live_photo_disabled">Live Photo disabled</string>
     <string name="live_photo_processing">Creating Live Photo\u2026</string>
@@ -1107,6 +1108,8 @@
     <string name="live_photo_not_supported">Live Photo is not supported on this device</string>
     <string name="live_photo_buffering">Buffering video for Live Photo\u2026</string>
     <string name="live_photo_hold_steady">Hold the camera steady for Live Photo</string>
+    <string name="live_photo_mode_fallback">Live Photo needs Standard capture \u2014 this photo mode is not available while Live Photo is on</string>
+    <string name="live_photo_buffer_unavailable">Live Photo is not ready \u2014 taking a normal photo</string>
 
     <!-- Language settings -->
     <string name="preference_category_language">Language</string>
