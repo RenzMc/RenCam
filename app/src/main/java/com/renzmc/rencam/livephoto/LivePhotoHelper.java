@@ -112,6 +112,77 @@ public final class LivePhotoHelper {
     }
 
     /**
+     * Packages a cover JPEG (as bytes) together with a video <b>file</b> into a Motion Photo.
+     *
+     * <p>Unlike {@link #packageMotionPhoto(byte[], byte[], File, long)} this streams the video
+     * straight from disk instead of loading it all into memory, which is important when the cover
+     * image came from a content {@code Uri} (e.g. MediaStore / SAF) that we could only read as
+     * bytes.</p>
+     */
+    public static boolean packageMotionPhoto(byte[] coverBytes, File videoFile, File outputFile,
+                                             long presentationTimestampUs) {
+        try {
+            long videoLength = videoFile.length();
+            byte[] jpegWithXmp = injectXMPIntoJPEG(coverBytes, videoLength, presentationTimestampUs);
+            try (FileOutputStream out = new FileOutputStream(outputFile)) {
+                out.write(jpegWithXmp);
+                try (InputStream videoIn = new java.io.FileInputStream(videoFile)) {
+                    byte[] buffer = new byte[128 * 1024];
+                    int read;
+                    while ((read = videoIn.read(buffer)) > 0) {
+                        out.write(buffer, 0, read);
+                    }
+                }
+            }
+            Log.d(TAG, "Packaged motion photo into " + outputFile.getAbsolutePath()
+                    + ", total size: " + outputFile.length() + " bytes");
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "Error packaging motion photo from cover bytes + video file", e);
+            return false;
+        }
+    }
+
+    /** Reads the whole content of a content {@link Uri} into a byte array. */
+    public static byte[] readUri(Context context, Uri uri) throws java.io.IOException {
+        try (InputStream in = context.getContentResolver().openInputStream(uri)) {
+            if (in == null) {
+                throw new java.io.IOException("openInputStream returned null for " + uri);
+            }
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                bos.write(buffer, 0, read);
+            }
+            return bos.toByteArray();
+        }
+    }
+
+    /**
+     * Overwrites the content of a content {@link Uri} with the bytes of {@code sourceFile}.
+     * Used to replace the plain still JPEG that the camera saved with the packaged Motion Photo.
+     */
+    public static boolean writeFileToUri(Context context, File sourceFile, Uri uri) {
+        try (InputStream in = new java.io.FileInputStream(sourceFile);
+             java.io.OutputStream out = context.getContentResolver().openOutputStream(uri, "wt")) {
+            if (out == null) {
+                return false;
+            }
+            byte[] buffer = new byte[128 * 1024];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                out.write(buffer, 0, read);
+            }
+            out.flush();
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "Error writing packaged motion photo back to uri " + uri, e);
+            return false;
+        }
+    }
+
+    /**
      * Injects the Google Motion Photo XMP metadata into a JPEG, inserting a new APP1 (0xFFE1)
      * segment immediately after the SOI marker. The original JPEG data is preserved.
      *

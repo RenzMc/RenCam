@@ -64,10 +64,13 @@ public class LivePhotoManager {
     private volatile boolean waiting_for_postroll;
     /** The still photo file, once it has been saved by {@code ImageSaver}. */
     private File pending_still;
+    /** The still photo content uri (MediaStore / SAF), once it has been saved by {@code ImageSaver}. */
+    private Uri pending_still_uri;
 
     // State used when the post-roll elapses before the still has finished saving.
     private volatile boolean waiting_for_still;
     private File stopped_video_file;
+    private Uri stopped_still_uri;
     private long stopped_shutter_offset;
     private int stopped_preroll;
     private int stopped_postroll;
@@ -170,6 +173,13 @@ public class LivePhotoManager {
                 Log.d(TAG, "not in photo preview mode");
             return;
         }
+        if( !preview.supportsPhotoVideoRecording() ) {
+            // Without the ability to capture a still while the buffer is recording, a Live Photo
+            // cannot be produced - fall back to normal photo capture (no buffering).
+            if( MyDebug.LOG )
+                Log.d(TAG, "device does not support photo-video recording");
+            return;
+        }
         File buffer_file = createBufferFile();
         if( buffer_file == null ) {
             Log.e(TAG, "failed to create live photo buffer file");
@@ -210,6 +220,8 @@ public class LivePhotoManager {
         waiting_for_postroll = false;
         waiting_for_still = false;
         pending_still = null;
+        pending_still_uri = null;
+        stopped_still_uri = null;
         if( stopped_video_file != null ) {
             if( stopped_video_file.exists() ) {
                 //noinspection ResultOfMethodCallIgnored
@@ -246,6 +258,7 @@ public class LivePhotoManager {
             Log.d(TAG, "shutter offset within buffer: " + shutter_time + "ms");
         waiting_for_postroll = true;
         pending_still = null;
+        pending_still_uri = null;
 
         // Schedule the stop after the post-roll has elapsed.
         int postroll = getPostrollMs();
@@ -284,10 +297,42 @@ public class LivePhotoManager {
             int preroll = stopped_preroll;
             int postroll = stopped_postroll;
             stopped_video_file = null;
-            startPackaging(video_file, stillFile, shutter_offset, preroll, postroll);
+            stopped_still_uri = null;
+            startPackaging(video_file, stillFile, null, shutter_offset, preroll, postroll);
         }
         else {
             pending_still = stillFile;
+            pending_still_uri = null;
+        }
+    }
+
+    /**
+     * Called once the still photo has been saved to a content {@link Uri} (MediaStore or SAF),
+     * so we know which file to use as the Motion Photo cover image.
+     *
+     * <p>This is the path used on Android 10+ where photos are saved via MediaStore by default,
+     * and whenever the user has enabled the Storage Access Framework. Without this the Live Photo
+     * manager would never be notified of the saved still and the photo would remain a plain JPEG.</p>
+     */
+    public synchronized void onStillSaved(Uri stillUri) {
+        if( MyDebug.LOG )
+            Log.d(TAG, "onStillSaved(uri): " + stillUri);
+        if( !isEnabled() ) {
+            return;
+        }
+        if( waiting_for_still ) {
+            waiting_for_still = false;
+            File video_file = stopped_video_file;
+            long shutter_offset = stopped_shutter_offset;
+            int preroll = stopped_preroll;
+            int postroll = stopped_postroll;
+            stopped_video_file = null;
+            stopped_still_uri = null;
+            startPackaging(video_file, null, stillUri, shutter_offset, preroll, postroll);
+        }
+        else {
+            pending_still = null;
+            pending_still_uri = stillUri;
         }
     }
 
@@ -306,13 +351,15 @@ public class LivePhotoManager {
      * Called when the post-roll has elapsed: stops the buffer and either packages immediately
      * (if the still is already saved) or waits for the still to arrive.
      */
-    private void onPostrollElapsed() {
+    private synchronized void onPostrollElapsed() {
         final File video_file = stopBuffering();
         final File still_file = pending_still;
+        final Uri still_uri = pending_still_uri;
         final long shutter_offset = shutter_time;
         final int preroll = getPrerollMs();
         final int postroll = getPostrollMs();
         pending_still = null;
+        pending_still_uri = null;
 
         if( video_file == null ) {
             if( MyDebug.LOG )
@@ -321,13 +368,17 @@ public class LivePhotoManager {
         }
 
         if( still_file != null && still_file.exists() ) {
-            startPackaging(video_file, still_file, shutter_offset, preroll, postroll);
+            startPackaging(video_file, still_file, null, shutter_offset, preroll, postroll);
+        }
+        else if( still_uri != null ) {
+            startPackaging(video_file, null, still_uri, shutter_offset, preroll, postroll);
         }
         else {
             // The still hasn't been saved yet - keep the video and wait for onStillSaved().
             if( MyDebug.LOG )
                 Log.d(TAG, "still not saved yet, waiting for it before packaging");
             stopped_video_file = video_file;
+            stopped_still_uri = null;
             stopped_shutter_offset = shutter_offset;
             stopped_preroll = preroll;
             stopped_postroll = postroll;
@@ -336,11 +387,12 @@ public class LivePhotoManager {
     }
 
     /** Runs the (potentially slow) trimming/packaging on a background thread. */
-    private void startPackaging(final File video_file, final File still_file, final long shutter_offset,
-                                final int preroll, final int postroll) {
-        if( video_file == null || still_file == null || !still_file.exists() ) {
+    private void startPackaging(final File video_file, final File still_file, final Uri still_uri,
+                                final long shutter_offset, final int preroll, final int postroll) {
+        boolean have_still = (still_file != null && still_file.exists()) || still_uri != null;
+        if( video_file == null || !have_still ) {
             if( MyDebug.LOG )
-                Log.d(TAG, "cannot package live photo: video=" + video_file + " still=" + still_file);
+                Log.d(TAG, "cannot package live photo: video=" + video_file + " still=" + still_file + " uri=" + still_uri);
             if( video_file != null && video_file.exists() ) {
                 //noinspection ResultOfMethodCallIgnored
                 video_file.delete();
@@ -352,7 +404,7 @@ public class LivePhotoManager {
             @Override
             public void run() {
                 try {
-                    packageLivePhoto(video_file, still_file, shutter_offset, preroll, postroll);
+                    packageLivePhoto(video_file, still_file, still_uri, shutter_offset, preroll, postroll);
                 }
                 catch(Exception e) {
                     Log.e(TAG, "failed to package live photo", e);
@@ -367,7 +419,7 @@ public class LivePhotoManager {
         }, "LivePhotoPackager").start();
     }
 
-    private void packageLivePhoto(File video_file, File still_file, long shutter_offset,
+    private void packageLivePhoto(File video_file, File still_file, Uri still_uri, long shutter_offset,
                                   int preroll, int postroll) {
         if( MyDebug.LOG )
             Log.d(TAG, "packageLivePhoto: shutter_offset=" + shutter_offset + " preroll=" + preroll + " postroll=" + postroll);
@@ -382,6 +434,32 @@ public class LivePhotoManager {
         // The still corresponds to (shutter_offset - clip_start) ms into the trimmed clip.
         long presentation_us = Math.max(0, shutter_offset - clip_start) * 1000L;
 
+        if( still_file != null && still_file.exists() ) {
+            packageIntoFile(still_file, motion_source, presentation_us);
+        }
+        else if( still_uri != null ) {
+            packageIntoUri(still_uri, motion_source, presentation_us);
+        }
+        else {
+            Log.e(TAG, "no still image to package");
+        }
+
+        if( trimmed.exists() ) {
+            //noinspection ResultOfMethodCallIgnored
+            trimmed.delete();
+        }
+
+        // Restart buffering so the next shot is also a Live Photo.
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                startBuffering();
+            }
+        });
+    }
+
+    /** Packages the still (a plain file) in place, replacing it with the Motion Photo. */
+    private void packageIntoFile(File still_file, File motion_source, long presentation_us) {
         File output = new File(still_file.getParentFile(), still_file.getName() + ".live.tmp");
         boolean ok = LivePhotoHelper.packageMotionPhoto(still_file, motion_source, output, presentation_us);
         if( ok && output.exists() ) {
@@ -403,23 +481,47 @@ public class LivePhotoManager {
         else {
             Log.e(TAG, "failed to package motion photo");
         }
-
-        if( trimmed.exists() ) {
-            //noinspection ResultOfMethodCallIgnored
-            trimmed.delete();
-        }
         if( !ok && output.exists() ) {
             //noinspection ResultOfMethodCallIgnored
             output.delete();
         }
+    }
 
-        // Restart buffering so the next shot is also a Live Photo.
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                startBuffering();
+    /**
+     * Packages the still (a content {@link Uri} from MediaStore/SAF) and writes the Motion Photo
+     * back over the same Uri, replacing the plain JPEG that was saved.
+     */
+    private void packageIntoUri(Uri still_uri, File motion_source, long presentation_us) {
+        File output = null;
+        try {
+            byte[] coverBytes = LivePhotoHelper.readUri(context, still_uri);
+            output = new File(context.getCacheDir(),
+                    "rencam_live_pkg_" + System.currentTimeMillis() + ".jpg");
+            boolean ok = LivePhotoHelper.packageMotionPhoto(coverBytes, motion_source, output, presentation_us);
+            if( ok && output.exists() ) {
+                long new_size = output.length();
+                if( LivePhotoHelper.writeFileToUri(context, output, still_uri) ) {
+                    if( MyDebug.LOG )
+                        Log.d(TAG, "live photo saved to uri: " + still_uri);
+                    notifySaved(still_uri, new_size);
+                }
+                else {
+                    Log.e(TAG, "failed to write live photo back to uri");
+                }
             }
-        });
+            else {
+                Log.e(TAG, "failed to package motion photo for uri");
+            }
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to package motion photo into uri", e);
+        }
+        finally {
+            if( output != null && output.exists() ) {
+                //noinspection ResultOfMethodCallIgnored
+                output.delete();
+            }
+        }
     }
 
     private void notifySaved(final File file) {
@@ -430,6 +532,29 @@ public class LivePhotoManager {
         }
         catch(Exception e) {
             Log.e(TAG, "failed to scan live photo file", e);
+        }
+    }
+
+    private void notifySaved(final Uri uri, final long new_size) {
+        // The file content changed in place; refresh the MediaStore metadata (size/mtime) so that
+        // gallery apps (and our own thumbnail) see the updated Motion Photo.
+        try {
+            if( "content".equals(uri.getScheme()) ) {
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(android.provider.MediaStore.MediaColumns.SIZE, new_size);
+                values.put(android.provider.MediaStore.MediaColumns.DATE_MODIFIED,
+                        System.currentTimeMillis() / 1000L);
+                context.getContentResolver().update(uri, values, null, null);
+            }
+            // Best-effort: also request a scan so external viewers see the updated file promptly.
+            String path = uri.getPath();
+            if( path != null && path.startsWith("/") ) {
+                android.media.MediaScannerConnection.scanFile(context,
+                        new String[]{ path }, new String[]{ "image/jpeg" }, null);
+            }
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to refresh live photo uri metadata", e);
         }
     }
 

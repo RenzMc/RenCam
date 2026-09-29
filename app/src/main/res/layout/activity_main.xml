@@ -109,6 +109,24 @@
         android:visibility="gone"
         />
 
+    <!-- RenCam: small "LIVE" badge shown when Live Photo mode is active -->
+    <TextView
+        android:id="@+id/live_photo_indicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingLeft="8dp"
+        android:paddingRight="8dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:background="@drawable/live_photo_indicator_background"
+        android:text="@string/live_photo_indicator"
+        android:textColor="#FFFFFF"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:contentDescription="@string/live_photo_mode_active"
+        android:visibility="gone"
+        />
+
     <!-- n.b., need to specify a fixed width/height rather than wrap_content, so that MainUI.setFixedRotation()
         works okay (to help layout in portrait system orientation)
     -->

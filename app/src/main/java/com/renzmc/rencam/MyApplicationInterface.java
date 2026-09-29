@@ -3680,6 +3680,8 @@ public class MyApplicationInterface extends BasicApplicationInterface {
         last_images_type = LastImagesType.SAF;
         LastImage last_image = new LastImage(uri, share);
         last_images.add(last_image);
+        // RenCam: the still has been saved to a SAF uri - let the Live Photo manager package it
+        getLivePhotoManager().onStillSaved(uri);
     }
 
     void addLastImageMediaStore(Uri uri, boolean share) {
@@ -3690,6 +3692,8 @@ public class MyApplicationInterface extends BasicApplicationInterface {
         last_images_type = LastImagesType.MEDIASTORE;
         LastImage last_image = new LastImage(uri, share);
         last_images.add(last_image);
+        // RenCam: the still has been saved to a MediaStore uri - let the Live Photo manager package it
+        getLivePhotoManager().onStillSaved(uri);
     }
 
     void clearLastImages() {

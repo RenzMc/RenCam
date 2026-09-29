@@ -2,6 +2,7 @@ package com.renzmc.rencam.preview;
 
 import com.renzmc.rencam.cameracontroller.RawImage;
 //import com.renzmc.rencam.MainActivity;
+import com.renzmc.rencam.MainActivity;
 import com.renzmc.rencam.MyDebug;
 import com.renzmc.rencam.R;
 import com.renzmc.rencam.ScriptC_histogram_compute;
@@ -479,7 +480,27 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
 			cameraSurface.getView().setLayoutParams(layoutParams);
 		}*/
 
-        gestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener());
+        gestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                // RenCam: a horizontal fling on the preview switches between photo and video mode,
+                // mirroring the swipe on the main shutter button.
+                if( e1 == null || e2 == null )
+                    return false;
+                if( e1.getPointerCount() != 1 || e2.getPointerCount() != 1 )
+                    return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                float threshold = 80 * getResources().getDisplayMetrics().density;
+                if( Math.abs(dx) > Math.abs(dy) * 1.5f && Math.abs(dx) > threshold ) {
+                    if( getContext() instanceof MainActivity ) {
+                        ((MainActivity)getContext()).swipeTakePhoto(dx < 0);
+                    }
+                    return true;
+                }
+                return false;
+            }
+        });
         gestureDetector.setOnDoubleTapListener(new DoubleTapListener());
         scaleGestureDetector = new ScaleGestureDetector(getContext(), new ScaleListener());
 
@@ -5793,13 +5814,30 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             camera_controller.initVideoRecorderPrePrepare(local_recorder);
             profile.copyToMediaRecorder(local_recorder);
             local_recorder.setOutputFile(outputFile.getAbsolutePath());
+            // Bound the continuously running buffer so it can't grow without limit if the camera
+            // is left idle. When the cap is reached MediaRecorder finalises the file and stops; the
+            // next shutter still produces a valid (shorter) Live Photo.
+            try {
+                local_recorder.setMaxFileSize(100L * 1024L * 1024L); // 100MB
+            }
+            catch(Exception e) {
+                Log.e(TAG, "failed to set max file size for live photo buffer", e);
+            }
+            try {
+                local_recorder.setMaxDuration(120000); // 120s
+            }
+            catch(Exception e) {
+                Log.e(TAG, "failed to set max duration for live photo buffer", e);
+            }
             cameraSurface.setVideoRecorder(local_recorder);
             local_recorder.setOrientationHint(getImageVideoRotation());
             if( MyDebug.LOG )
                 Log.d(TAG, "about to prepare live photo buffer recorder");
             local_recorder.prepare();
-            // true => set up a session that also supports taking photos while recording
-            camera_controller.initVideoRecorderPostPrepare(local_recorder, true);
+            // set up a session that also supports taking photos while recording (needed so we can
+            // capture the still that becomes the Live Photo cover image while the buffer records)
+            boolean want_photo_video_recording = supportsPhotoVideoRecording();
+            camera_controller.initVideoRecorderPostPrepare(local_recorder, want_photo_video_recording);
             local_recorder.start();
             this.live_photo_recorder = local_recorder;
             this.live_photo_buffer_file = outputFile;

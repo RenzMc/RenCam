@@ -587,6 +587,26 @@ public class MainUI {
             view.setLayoutParams(layoutParams);
             setViewRotation(view, ui_rotation);
 
+            // RenCam: the "LIVE" badge sits just above the shutter button, centred on the same axis
+            view = main_activity.findViewById(R.id.live_photo_indicator);
+            layoutParams = (RelativeLayout.LayoutParams)view.getLayoutParams();
+            layoutParams.addRule(align_parent_left, 0);
+            layoutParams.addRule(align_parent_right, 0);
+            layoutParams.addRule(align_parent_top, 0);
+            layoutParams.addRule(align_parent_bottom, 0);
+            layoutParams.addRule(center_vertical, RelativeLayout.TRUE);
+            layoutParams.addRule(center_horizontal, 0);
+            layoutParams.addRule(ui_independent_above, R.id.take_photo);
+            layoutParams.addRule(ui_independent_below, 0);
+            layoutParams.addRule(ui_independent_left_of, 0);
+            layoutParams.addRule(ui_independent_right_of, 0);
+            {
+                int margin = (int) (6 * scale + 0.5f); // convert dps to pixels
+                setMarginsForSystemUI(layoutParams, 0, 0, navigation_gap + margin, 0);
+            }
+            view.setLayoutParams(layoutParams);
+            setViewRotation(view, ui_rotation);
+
             view = main_activity.findViewById(R.id.switch_camera);
             layoutParams = (RelativeLayout.LayoutParams)view.getLayoutParams();
             layoutParams.addRule(align_parent_left, 0);
@@ -1107,6 +1127,21 @@ public class MainUI {
             view.setImageResource(resource);
             view.setTag(resource); // for testing
         }
+        updateLivePhotoIndicator();
+    }
+
+    /** RenCam: shows the "LIVE" badge when Live Photo is enabled and we're in photo mode. */
+    public void updateLivePhotoIndicator() {
+        if( main_activity.getPreview() == null )
+            return;
+        View indicator = main_activity.findViewById(R.id.live_photo_indicator);
+        if( indicator == null )
+            return;
+        boolean show = main_activity.getApplicationInterface().getLivePhotoManager().isEnabled()
+                && !main_activity.getPreview().isVideo();
+        if( MyDebug.LOG )
+            Log.d(TAG, "updateLivePhotoIndicator: " + show);
+        indicator.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     /** Set content description for switch camera button.
@@ -1331,6 +1366,7 @@ public class MainUI {
                 View switchCameraButton = main_activity.findViewById(R.id.switch_camera);
                 View switchMultiCameraButton = main_activity.findViewById(R.id.switch_multi_camera);
                 View switchVideoButton = main_activity.findViewById(R.id.switch_video);
+                View livePhotoIndicator = main_activity.findViewById(R.id.live_photo_indicator);
                 View exposureButton = main_activity.findViewById(R.id.exposure);
                 View exposureLockButton = main_activity.findViewById(R.id.exposure_lock);
                 View whiteBalanceLockButton = main_activity.findViewById(R.id.white_balance_lock);
@@ -1354,6 +1390,10 @@ public class MainUI {
                 if( main_activity.showSwitchMultiCamIcon() )
                     switchMultiCameraButton.setVisibility(visibility);
                 switchVideoButton.setVisibility(visibility);
+                if( immersive_mode )
+                    livePhotoIndicator.setVisibility(View.GONE);
+                else
+                    updateLivePhotoIndicator();
                 if( main_activity.supportsExposureButton() )
                     exposureButton.setVisibility(visibility);
                 if( showExposureLockIcon() )
@@ -1513,6 +1553,7 @@ public class MainUI {
                 if( show_gui_photo && show_gui_video ) {
                     layoutUI(); // needed for "top" UIPlacement, to auto-arrange the buttons
                 }
+                updateLivePhotoIndicator();
                 hidebuttons();
             }
         });

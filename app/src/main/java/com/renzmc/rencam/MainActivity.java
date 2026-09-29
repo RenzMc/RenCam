@@ -558,21 +558,54 @@ public class MainActivity extends AppCompatActivity {
                 return longClickedTakePhoto();
             }
         });
-        // set up on touch listener so we can detect if we've released from a long click
+        // set up on touch listener so we can detect if we've released from a long click,
+        // and so we can detect a horizontal swipe to switch between photo and video mode.
         takePhotoButton.setOnTouchListener(new View.OnTouchListener() {
             // the suppressed warning ClickableViewAccessibility suggests calling view.performClick for ACTION_UP, but this
             // results in an additional call to clickedTakePhoto() - that is, if there is no long press, we get two calls to
             // clickedTakePhoto instead one one; and if there is a long press, we get one call to clickedTakePhoto where
             // there should be none.
+            private float swipe_down_x;
+            private float swipe_down_y;
+            private boolean swipe_detected;
+
             @SuppressLint("ClickableViewAccessibility")
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
-                if( motionEvent.getAction() == MotionEvent.ACTION_UP ) {
-                    if( MyDebug.LOG )
-                        Log.d(TAG, "takePhotoButton ACTION_UP");
-                    takePhotoButtonLongClickCancelled();
-                    if( MyDebug.LOG )
-                        Log.d(TAG, "takePhotoButton ACTION_UP done");
+                switch( motionEvent.getActionMasked() ) {
+                    case MotionEvent.ACTION_DOWN:
+                        swipe_down_x = motionEvent.getRawX();
+                        swipe_down_y = motionEvent.getRawY();
+                        swipe_detected = false;
+                        return false;
+                    case MotionEvent.ACTION_MOVE: {
+                        if( !swipe_detected ) {
+                            float dx = motionEvent.getRawX() - swipe_down_x;
+                            float dy = motionEvent.getRawY() - swipe_down_y;
+                            // require a mostly-horizontal drag so we don't hijack vertical gestures
+                            float threshold = 20 * getResources().getDisplayMetrics().density;
+                            if( Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy) * 1.5f ) {
+                                swipe_detected = true;
+                                view.setPressed(false);
+                                takePhotoButtonLongClickCancelled();
+                                swipeTakePhoto(dx < 0);
+                            }
+                        }
+                        return swipe_detected;
+                    }
+                    case MotionEvent.ACTION_UP:
+                        if( MyDebug.LOG )
+                            Log.d(TAG, "takePhotoButton ACTION_UP");
+                        takePhotoButtonLongClickCancelled();
+                        boolean was_swiped = swipe_detected;
+                        swipe_detected = false;
+                        if( MyDebug.LOG )
+                            Log.d(TAG, "takePhotoButton ACTION_UP done");
+                        // if we detected a swipe, consume the event so a normal click isn't also fired
+                        return was_swiped;
+                    case MotionEvent.ACTION_CANCEL:
+                        swipe_detected = false;
+                        return false;
                 }
                 return false;
             }
@@ -2388,6 +2421,27 @@ public class MainActivity extends AppCompatActivity {
             pushCameraIdToast(cameraId);
             userSwitchToCamera(cameraId);
         }
+    }
+
+    /**
+     * RenCam: called when the user swipes horizontally on the main shutter button, to switch
+     * between Photo mode (which becomes Live Photo mode when Live Photo is enabled) and Video mode.
+     *
+     * @param left true if the swipe was towards the left, false if towards the right. Both
+     *             directions toggle the mode, so the direction is only used for logging.
+     */
+    public void swipeTakePhoto(boolean left) {
+        if( MyDebug.LOG )
+            Log.d(TAG, "swipeTakePhoto: left=" + left);
+        if( this.preview == null )
+            return;
+        // don't allow switching modes while we're busy capturing or recording
+        if( this.preview.isVideoRecording() || this.preview.isTakingPhoto() || this.preview.isTakingPhotoOrOnTimer() )
+            return;
+        if( !this.preview.isPreviewStarted() )
+            return;
+        // switching to/from video mode reopens the camera, so make sure we're not mid-capture
+        clickedSwitchVideo(null);
     }
 
     /**
