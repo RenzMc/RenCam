@@ -67,6 +67,14 @@ public class VideoQualityHandler {
             Dimension2D dim = dimensions.get(i);
             addVideoResolutions(done_video_size, profiles.get(i), dim.width, dim.height);
         }
+        // RenCam: append a 9:16 variant of every quality. The variant is the same quality string with a
+        // "_916" suffix; Preview strips the suffix when resolving the profile (so the video is still
+        // recorded at the landscape size) and centre-crops the result to 9:16. Appending them after the
+        // normal entries keeps the default "highest quality" choice (index 0) untouched.
+        int normal_count = video_quality.size();
+        for(int i=0;i<normal_count;i++) {
+            video_quality.add(video_quality.get(i) + "_916");
+        }
         if( MyDebug.LOG ) {
             for(int i=0;i<video_quality.size();i++) {
                 Log.d(TAG, "supported video quality: " + video_quality.get(i));

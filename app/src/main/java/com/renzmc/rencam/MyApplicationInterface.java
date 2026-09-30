@@ -232,6 +232,18 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
 
     /** Instance wrapper for {@link #getPhotoAspectRatio(SharedPreferences)}. */
     public double getPhotoAspectRatio() {
+        return getPhotoAspectRatio(sharedPreferences, cameraId);
+    }
+
+    /**
+     * RenCam: the effective photo output aspect ratio for a given camera. If the user picked a
+     * portrait resolution (one of the 9:16 entries in the resolution list), the photo is cropped to
+     * that ratio; otherwise the dedicated photo aspect ratio preference is used.
+     */
+    public static double getPhotoAspectRatio(SharedPreferences sharedPreferences, int cameraId) {
+        if( isNineSixteenResolution(sharedPreferences.getString(PreferenceKeys.getResolutionPreferenceKey(cameraId), "")) ) {
+            return 9.0 / 16.0;
+        }
         return getPhotoAspectRatio(sharedPreferences);
     }
 
@@ -243,6 +255,12 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
 
     /** Instance wrapper for {@link #getVideoAspectRatio(SharedPreferences)}. */
     public double getVideoAspectRatio() {
+        // RenCam: if the current video quality is one of the 9:16 entries, crop the recorded video to
+        // 9:16 (the video is still recorded at the landscape size, then centre-cropped).
+        String quality = getVideoQualityPref();
+        if( quality != null && quality.endsWith("_916") ) {
+            return 9.0 / 16.0;
+        }
         return getVideoAspectRatio(sharedPreferences);
     }
 
@@ -266,6 +284,45 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
             // ignore - fall through to 0 (native)
         }
         return 0.0;
+    }
+
+    /**
+     * RenCam: parses a saved camera-resolution value of the form "&lt;width&gt; &lt;height&gt;" into a
+     * two-element array, or returns null if it can't be parsed. A portrait value (width &lt; height)
+     * means the user picked one of the 9:16 resolution entries.
+     */
+    public static int[] parseResolutionString(String value) {
+        if( value == null ) {
+            return null;
+        }
+        String[] parts = value.trim().split("\\s+");
+        if( parts.length < 2 ) {
+            return null;
+        }
+        try {
+            int w = Integer.parseInt(parts[0]);
+            int h = Integer.parseInt(parts[1]);
+            if( w > 0 && h > 0 ) {
+                return new int[] { w, h };
+            }
+        }
+        catch(NumberFormatException e ) {
+            // ignore
+        }
+        return null;
+    }
+
+    /**
+     * RenCam: whether a saved resolution value is one of the 9:16 entries. Those are stored as
+     * "&lt;width&gt; &lt;height&gt; 916" (the landscape capture size plus a marker), so that the
+     * underlying capture size is still valid while the output is cropped to 9:16.
+     */
+    public static boolean isNineSixteenResolution(String value) {
+        if( value == null ) {
+            return false;
+        }
+        String[] parts = value.trim().split("\\s+");
+        return parts.length >= 3 && "916".equals(parts[2]);
     }
 
     public LivePhotoManager getLivePhotoManager() {
@@ -693,34 +750,15 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         if( MyDebug.LOG )
             Log.d(TAG, "resolution_value: " + resolution_value);
         Pair<Integer, Integer> result = null;
-        if( resolution_value.length() > 0 ) {
-            // parse the saved size, and make sure it is still valid
-            int index = resolution_value.indexOf(' ');
-            if( index == -1 ) {
-                if( MyDebug.LOG )
-                    Log.d(TAG, "resolution_value invalid format, can't find space");
-            }
-            else {
-                String resolution_w_s = resolution_value.substring(0, index);
-                String resolution_h_s = resolution_value.substring(index+1);
-                if( MyDebug.LOG ) {
-                    Log.d(TAG, "resolution_w_s: " + resolution_w_s);
-                    Log.d(TAG, "resolution_h_s: " + resolution_h_s);
-                }
-                try {
-                    int resolution_w = Integer.parseInt(resolution_w_s);
-                    if( MyDebug.LOG )
-                        Log.d(TAG, "resolution_w: " + resolution_w);
-                    int resolution_h = Integer.parseInt(resolution_h_s);
-                    if( MyDebug.LOG )
-                        Log.d(TAG, "resolution_h: " + resolution_h);
-                    result = new Pair<>(resolution_w, resolution_h);
-                }
-                catch(NumberFormatException exception) {
-                    if( MyDebug.LOG )
-                        Log.d(TAG, "resolution_value invalid format, can't parse w or h to int");
-                }
-            }
+        // RenCam: parseResolutionString() tolerates the optional trailing "916" marker used by the
+        // 9:16 resolution entries, and returns the underlying (landscape) capture size.
+        int[] resolution_wh = parseResolutionString(resolution_value);
+        if( resolution_wh != null ) {
+            result = new Pair<>(resolution_wh[0], resolution_wh[1]);
+        }
+        else if( resolution_value.length() > 0 ) {
+            if( MyDebug.LOG )
+                Log.d(TAG, "resolution_value invalid format: " + resolution_value);
         }
 
         if( photo_mode == PhotoMode.NoiseReduction || photo_mode == PhotoMode.HDR ) {
@@ -3171,6 +3209,16 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
     public void setCameraResolutionPref(int width, int height) {
         if( getPhotoMode() == PhotoMode.Panorama ) {
             // in Panorama mode we'll have set a different resolution to the user setting, so don't want that to then be saved!
+            return;
+        }
+        // RenCam: if the user picked a 9:16 resolution, Preview reports the underlying landscape
+        // capture size back here. Keep the 9:16 marker the user chose, otherwise the 9:16 entry would
+        // be silently reverted to the plain landscape one the next time the resolution list is shown.
+        String existing_value = sharedPreferences.getString(PreferenceKeys.getResolutionPreferenceKey(cameraId), "");
+        int[] existing_wh = parseResolutionString(existing_value);
+        if( isNineSixteenResolution(existing_value) && existing_wh != null && existing_wh[0] == width && existing_wh[1] == height ) {
+            if( MyDebug.LOG )
+                Log.d(TAG, "keep 9:16 resolution value");
             return;
         }
         String resolution_value = width + " " + height;

@@ -3483,6 +3483,11 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         int cameraId = camera_controller.getCameraId();
         CamcorderProfile camcorder_profile = CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_HIGH); // default
         try {
+            // RenCam: strip the 9:16 marker used by the 9:16 video quality entries, so the underlying
+            // (landscape) profile is resolved as usual; the 9:16 crop is applied to the recorded video.
+            if( quality != null && quality.endsWith("_916") ) {
+                quality = quality.substring(0, quality.length() - 4);
+            }
             String profile_string = quality;
             int index = profile_string.indexOf('_');
             if( index != -1 ) {
@@ -3880,7 +3885,15 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         CamcorderProfile profile = getCamcorderProfile(quality);
         String type = getCamcorderProfileDescriptionType(profile);
         String space = type.length() == 0 ? "" : " ";
-        return profile.videoFrameWidth + "x" + profile.videoFrameHeight + space + type;
+        int disp_w = profile.videoFrameWidth;
+        int disp_h = profile.videoFrameHeight;
+        // RenCam: show the 9:16 (portrait) output dimensions for the 9:16 video quality entries.
+        if( quality != null && quality.endsWith("_916") ) {
+            int long_side = Math.max(disp_w, disp_h);
+            disp_w = (int) Math.round(long_side * 9.0 / 16.0);
+            disp_h = long_side;
+        }
+        return disp_w + "x" + disp_h + space + type;
     }
 
     public String getCamcorderProfileDescription(String quality) {
@@ -3889,7 +3902,15 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         CamcorderProfile profile = getCamcorderProfile(quality);
         String type = getCamcorderProfileDescriptionType(profile);
         String space = type.length() == 0 ? "" : " ";
-        return type + space + profile.videoFrameWidth + "x" + profile.videoFrameHeight + " " + getAspectRatioMPString(getResources(), profile.videoFrameWidth, profile.videoFrameHeight, true);
+        int disp_w = profile.videoFrameWidth;
+        int disp_h = profile.videoFrameHeight;
+        // RenCam: show the 9:16 (portrait) output dimensions for the 9:16 video quality entries.
+        if( quality != null && quality.endsWith("_916") ) {
+            int long_side = Math.max(disp_w, disp_h);
+            disp_w = (int) Math.round(long_side * 9.0 / 16.0);
+            disp_h = long_side;
+        }
+        return type + space + disp_w + "x" + disp_h + " " + getAspectRatioMPString(getResources(), disp_w, disp_h, true);
     }
 
     public double getTargetRatio() {

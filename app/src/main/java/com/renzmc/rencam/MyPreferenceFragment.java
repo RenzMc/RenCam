@@ -246,12 +246,25 @@ public class MyPreferenceFragment extends PreferenceFragment implements OnShared
         final int [] heights = bundle.getIntArray("resolution_heights");
         final boolean [] supports_burst = bundle.getBooleanArray("resolution_supports_burst");
         if( widths != null && heights != null && supports_burst != null ) {
-            CharSequence [] entries = new CharSequence[widths.length];
-            CharSequence [] values = new CharSequence[widths.length];
+            // RenCam: build the resolution list, and after each landscape size add a 9:16 (portrait)
+            // variant so the user can pick a 9:16 output directly. The 9:16 entry is stored as
+            // "<width> <height> 916" (the landscape capture size plus a marker); Preview captures at
+            // that size and the photo is centre-cropped to 9:16 afterwards.
+            java.util.List<CharSequence> entries_list = new java.util.ArrayList<>();
+            java.util.List<CharSequence> values_list = new java.util.ArrayList<>();
             for(int i=0;i<widths.length;i++) {
-                entries[i] = widths[i] + " x " + heights[i] + " " + Preview.getAspectRatioMPString(getResources(), widths[i], heights[i], supports_burst[i]);
-                values[i] = widths[i] + " " + heights[i];
+                entries_list.add(widths[i] + " x " + heights[i] + " " + Preview.getAspectRatioMPString(getResources(), widths[i], heights[i], supports_burst[i]));
+                values_list.add(widths[i] + " " + heights[i]);
+                if( widths[i] > heights[i] ) {
+                    // the longest side is kept; the other is set to longest * 9/16 so the result is 9:16
+                    int long_side = widths[i];
+                    int short_side = (int) Math.round(long_side * 9.0 / 16.0);
+                    entries_list.add(short_side + " x " + long_side + " (9:16, " + Preview.getMPString(short_side, long_side) + ")");
+                    values_list.add(widths[i] + " " + heights[i] + " 916");
+                }
             }
+            CharSequence [] entries = entries_list.toArray(new CharSequence[entries_list.size()]);
+            CharSequence [] values = values_list.toArray(new CharSequence[values_list.size()]);
             ListPreference lp = (ListPreference)findPreference("preference_resolution");
             lp.setEntries(entries);
             lp.setEntryValues(values);

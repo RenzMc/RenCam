@@ -385,14 +385,45 @@ public class PopupView extends LinearLayout {
                 Collections.reverse(picture_sizes);
                 picture_size_index = -1;
                 CameraController.Size current_picture_size = preview.getCurrentPictureSize();
+                final String current_resolution_value = sharedPreferences.getString(PreferenceKeys.getResolutionPreferenceKey(preview.getCameraId()), "");
                 final List<String> picture_size_strings = new ArrayList<>();
-                for(int i=0;i<picture_sizes.size();i++) {
+                // RenCam: parallel list of the value saved for each entry, so the 9:16 entries can store
+                // their "<width> <height> 916" marker instead of just "<width> <height>".
+                final List<String> picture_size_values = new ArrayList<>();
+                final int normal_size_count = picture_sizes.size();
+                for(int i=0;i<normal_size_count;i++) {
                     CameraController.Size picture_size = picture_sizes.get(i);
                     //String size_string = picture_size.width + " x " + picture_size.height;
                     String size_string = picture_size.width + " x " + picture_size.height + " (" + Preview.getMPString(picture_size.width, picture_size.height) +")";
                     picture_size_strings.add(size_string);
-                    if( picture_size.equals( current_picture_size ) ) {
+                    String value = picture_size.width + " " + picture_size.height;
+                    picture_size_values.add(value);
+                    if( picture_size.equals( current_picture_size ) && value.equals(current_resolution_value) ) {
                         picture_size_index = i;
+                    }
+                }
+                // RenCam: append 9:16 (portrait) variants after the normal sizes.
+                for(int i=0;i<normal_size_count;i++) {
+                    CameraController.Size picture_size = picture_sizes.get(i);
+                    if( picture_size.width > picture_size.height ) {
+                        int long_side = picture_size.width;
+                        int short_side = (int) Math.round(long_side * 9.0 / 16.0);
+                        String value = picture_size.width + " " + picture_size.height + " 916";
+                        picture_sizes.add(picture_size);
+                        picture_size_strings.add(short_side + " x " + long_side + " (9:16, " + Preview.getMPString(short_side, long_side) + ")");
+                        picture_size_values.add(value);
+                        if( value.equals(current_resolution_value) ) {
+                            picture_size_index = picture_sizes.size() - 1;
+                        }
+                    }
+                }
+                if( picture_size_index == -1 ) {
+                    // fall back to matching just the capture size (e.g. if the saved value is empty)
+                    for(int i=0;i<normal_size_count;i++) {
+                        if( picture_sizes.get(i).equals( current_picture_size ) ) {
+                            picture_size_index = i;
+                            break;
+                        }
                     }
                 }
                 if( picture_size_index == -1 ) {
@@ -416,8 +447,7 @@ public class PopupView extends LinearLayout {
                     private void update() {
                         if( picture_size_index == -1 )
                             return;
-                        CameraController.Size new_size = picture_sizes.get(picture_size_index);
-                        String resolution_string = new_size.width + " " + new_size.height;
+                        String resolution_string = picture_size_values.get(picture_size_index);
                         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(main_activity);
                         SharedPreferences.Editor editor = sharedPreferences.edit();
                         editor.putString(PreferenceKeys.getResolutionPreferenceKey(preview.getCameraId()), resolution_string);
