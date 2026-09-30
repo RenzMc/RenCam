@@ -582,6 +582,14 @@ public class LivePhotoManager {
         if( MyDebug.LOG )
             Log.d(TAG, "releaseCapture, captures_in_flight=" + captures_in_flight);
         updateForegroundService();
+        // RenCam round 6: if the user queued more shutter presses while this capture was finishing,
+        // make sure the buffer is running again so they actually get captured - the buffer may still
+        // be restarting after the last shot (and without this the queue could sit idle until the next
+        // manual shutter press). scheduleBufferRestart() is safe to call from any thread: it just
+        // posts a retrying start to the main handler and re-checks the state.
+        if( pending_captures > 0 && captures_in_flight == 0 && !capturing && !buffer_running ) {
+            scheduleBufferRestart(8);
+        }
         // The buffer is usually running again by now; start any press the user queued meanwhile.
         maybeStartPendingCapture();
     }
@@ -824,7 +832,28 @@ public class LivePhotoManager {
                     Log.d(TAG, "flash-synced cover: expected " + expected_ms + "ms, chose " + chosen_ms + "ms");
             }
         }
-        return extractCoverJpeg(video_file, chosen_ms, target_aspect_ratio);
+        byte[] cover = extractCoverJpeg(video_file, chosen_ms, target_aspect_ratio);
+        if( cover == null ) {
+            // RenCam round 6: the frame at the chosen time couldn't be decoded. This happens on some
+            // devices when the requested time lands between frames, or right at the very start/end of
+            // the clip - and it was more likely on the flash-off path (where there is no bright sync
+            // mark to nudge us onto a good frame). Rather than lose the whole Live Photo (or leave it
+            // as a plain JPEG), try a few nearby timestamps before giving up.
+            long[] fallbacks = { chosen_ms - 50L, chosen_ms + 50L, chosen_ms - 100L,
+                    chosen_ms + 100L, chosen_ms - 200L, chosen_ms + 200L, 0L };
+            for( long t : fallbacks ) {
+                if( t < 0L || t == chosen_ms ) {
+                    continue;
+                }
+                cover = extractCoverJpeg(video_file, t, target_aspect_ratio);
+                if( cover != null ) {
+                    if( MyDebug.LOG )
+                        Log.d(TAG, "cover frame fallback succeeded at " + t + "ms (expected " + chosen_ms + "ms)");
+                    break;
+                }
+            }
+        }
+        return cover;
     }
 
     /**
@@ -1336,7 +1365,11 @@ public class LivePhotoManager {
         }
         CameraController controller = preview != null ? preview.getCameraController() : null;
         String current = controller != null ? controller.getFlashValue() : null; // "" if unsupported
-        boolean has_led = current != null && current.length() > 0;
+        // RenCam round 6: a value of "flash_frontscreen_*" means the camera is using the *screen* as
+        // its flash (no real LED), so it must NOT be treated as an LED. Some front cameras report a
+        // flash value even though they have no LED; without this check the burst would try to drive a
+        // non-existent LED instead of lighting the screen, so the front Live Photo came out dark.
+        boolean has_led = current != null && current.length() > 0 && !current.startsWith("flash_frontscreen");
 
         if( front && !has_led ) {
             // The front camera has no LED flash, so we use the "front screen flash": the screen is
@@ -1434,23 +1467,39 @@ public class LivePhotoManager {
             host.turnFrontScreenFlashOff();
             used_screen_flash = false;
         }
-        CameraController controller = preview != null ? preview.getCameraController() : null;
-        if( controller != null ) {
-            String restore = preview != null ? preview.getCurrentFlashValue() : null;
-            if( restore == null || restore.length() == 0 || restore.contains("torch") ) {
-                // No usable UI value, or the user had a torch mode selected: leave the light off so it
-                // can't stay lit through the post-roll. The user's mode is re-applied by the normal
-                // camera setup the next time the camera is (re)opened.
-                restore = "flash_off";
+        // RenCam round 6: only touch the camera's flash if a burst actually fired for THIS capture.
+        //
+        // When the Live Photo flash is set to "off" (or the camera has no light at all),
+        // startFlashBurst() returns early, so flash_fired stays false and flash_value_before_capture
+        // stays null. In that case we must NOT call setFlashValue() here: doing so pushes a brand-new
+        // repeating request into the camera session while the video buffer is still live, which on
+        // many devices disturbs the session right as the clip is being stopped - the flash-off Live
+        // Photo then came out as a plain JPEG (or otherwise "kacau"). This restores the original,
+        // working behaviour where the flash-off path never touched the camera, while still restoring
+        // the user's flash mode after a real (LED or screen) burst.
+        boolean burst_fired = flash_fired || flash_value_before_capture != null;
+        if( burst_fired ) {
+            CameraController controller = preview != null ? preview.getCameraController() : null;
+            if( controller != null ) {
+                String restore = preview != null ? preview.getCurrentFlashValue() : null;
+                if( restore == null || restore.length() == 0 || restore.contains("torch") ) {
+                    // No usable UI value, or the user had a torch mode selected: leave the light off so
+                    // it can't stay lit through the post-roll. The user's mode is re-applied by the
+                    // normal camera setup the next time the camera is (re)opened.
+                    restore = "flash_off";
+                }
+                if( MyDebug.LOG )
+                    Log.d(TAG, "stopFlashBurst, restoring flash: " + restore);
+                try {
+                    controller.setFlashValue(restore);
+                }
+                catch(Exception e) {
+                    Log.e(TAG, "failed to restore flash value", e);
+                }
             }
-            if( MyDebug.LOG )
-                Log.d(TAG, "stopFlashBurst, restoring flash: " + restore);
-            try {
-                controller.setFlashValue(restore);
-            }
-            catch(Exception e) {
-                Log.e(TAG, "failed to restore flash value", e);
-            }
+        }
+        else if( MyDebug.LOG ) {
+            Log.d(TAG, "stopFlashBurst: no burst fired, leaving camera flash untouched");
         }
         flash_value_before_capture = null;
         flash_use_screen = false;

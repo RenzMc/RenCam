@@ -51,9 +51,9 @@ Licence
 
 This source is released under the GPL v3 or later. Please see the licence in gpl-3.0.txt (or https://www.gnu.org/copyleft/gpl.html ). In particular, if you are using the RenCam source code in your own application, please see the requirements in the licence for making source code available.
 
-Please contact me if you have suggestions, bug fixes, or whatever: renzmc DOT dev AT gmail DOT com .
+Please contact me if you have suggestions, bug fixes, or whatever: renzaja11 AT gmail DOT com .
 
-Homepage: http://rencam.org.uk/
+Homepage: https://github.com/RenzMc/RenCam
 
 Google Play download: https://play.google.com/store/apps/details?id=com.renzmc.rencam
 

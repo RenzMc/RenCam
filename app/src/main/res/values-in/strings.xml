@@ -743,6 +743,10 @@
     <string name="preference_live_photo_audio">Rekam audio pada Foto Live</string>
     <string name="preference_live_photo_audio_summary">Sertakan audio pada klip video Foto Live (jika didukung perangkat).</string>
     <string name="live_photo_enabled">Foto Live diaktifkan</string>
+    <string name="live_photo_indicator">LIVE</string>
+    <string name="live_photo_mode_active">Mode Foto Live aktif</string>
+    <string name="live_photo_tap_to_enable">Ketuk untuk mengaktifkan Foto Live</string>
+    <string name="swipe_to_switch_mode">Geser tombol rana untuk beralih antara foto dan video</string>
     <string name="live_photo_disabled">Foto Live dinonaktifkan</string>
     <string name="live_photo_processing">Membuat Foto Live\u2026</string>
     <string name="live_photo_saved">Foto Live disimpan</string>
@@ -750,6 +754,9 @@
     <string name="live_photo_not_supported">Foto Live tidak didukung di perangkat ini</string>
     <string name="live_photo_buffering">Menyangga video untuk Foto Live\u2026</string>
     <string name="live_photo_hold_steady">Tahan kamera dengan stabil untuk Foto Live</string>
+    <string name="live_photo_mode_fallback">Foto Live memerlukan mode Standard \u2014 mode foto ini tidak tersedia saat Foto Live aktif</string>
+    <string name="live_photo_buffer_unavailable">Foto Live belum siap \u2014 mengambil foto biasa</string>
+    <string name="live_photo_queued">Foto Live masuk antrean \u2014 akan diambil berikutnya</string>
 
     <!-- Pengaturan bahasa -->
     <string name="preference_category_language">Bahasa</string>

@@ -1528,7 +1528,20 @@ public class MainActivity extends AppCompatActivity {
         // also if we change this method name or where it's located, remember to update the mention in
         // rencam_source.txt
         //return "https://rencam.sourceforge.io/" + append;
-        return "https://rencam.org.uk/" + append;
+        // RenCam round 6: the online help / homepage now points at the project's GitHub page
+        // instead of rencam.org.uk.
+        final String base = "https://github.com/RenzMc/RenCam";
+        if( append == null || append.length() == 0 ) {
+            return base;
+        }
+        else if( append.contains("privacy") ) {
+            // the privacy policy is published in the repository under _docs/
+            return base + "/blob/main/_docs/privacy_oc.html";
+        }
+        else if( append.startsWith("#") ) {
+            return base + append;
+        }
+        return base + "/blob/main/" + append;
     }
 
     void launchOnlineHelp() {

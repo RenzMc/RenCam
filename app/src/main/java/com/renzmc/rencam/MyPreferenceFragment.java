@@ -40,6 +40,7 @@ import android.text.Html;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
+import android.text.style.URLSpan;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
@@ -73,6 +74,10 @@ import java.util.Scanner;
  */
 public class MyPreferenceFragment extends PreferenceFragment implements OnSharedPreferenceChangeListener {
     private static final String TAG = "MyPreferenceFragment";
+
+    // RenCam round 6: developer links shown in the About dialog.
+    private static final String RENCAM_GITHUB_URL = "https://github.com/RenzMc/RenCam";
+    private static final String RENCAM_YOUTUBE_URL = "https://www.youtube.com/@Renz-Mc";
 
     private int cameraId;
 
@@ -1192,6 +1197,16 @@ public class MyPreferenceFragment extends PreferenceFragment implements OnShared
                         about_string.append(version);
                         about_string.append("\nCode: ");
                         about_string.append(version_code);
+                        // RenCam round 6: developer links, shown near the top of the About dialog.
+                        about_string.append("\nDeveloper: Renz-Mc");
+                        about_string.append("\nGitHub: ");
+                        final int github_link_start = about_string.length();
+                        about_string.append(RENCAM_GITHUB_URL);
+                        final int github_link_end = about_string.length();
+                        about_string.append("\nYouTube: ");
+                        final int youtube_link_start = about_string.length();
+                        about_string.append(RENCAM_YOUTUBE_URL);
+                        final int youtube_link_end = about_string.length();
                         about_string.append("\nPackage: ");
                         about_string.append(MyPreferenceFragment.this.getActivity().getPackageName());
                         about_string.append("\nAndroid API version: ");
@@ -1493,6 +1508,9 @@ public class MyPreferenceFragment extends PreferenceFragment implements OnShared
                         }
 
                         SpannableString span = new SpannableString(about_string);
+                        // RenCam round 6: make the GitHub and YouTube links clickable in the About dialog.
+                        span.setSpan(new URLSpan(RENCAM_GITHUB_URL), github_link_start, github_link_end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        span.setSpan(new URLSpan(RENCAM_YOUTUBE_URL), youtube_link_start, youtube_link_end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
                         // clickable text is only supported if we call setMovementMethod on the TextView - which means we need to create
                         // our own for the AlertDialog!
