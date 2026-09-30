@@ -667,7 +667,13 @@ public final class LivePhotoHelper {
 
             long startUs = startMs * 1000L;
             long endUs = endMs * 1000L;
-            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+            // Seek to the keyframe at or *before* startMs. Using SEEK_TO_CLOSEST_SYNC here could land
+            // on a keyframe *after* startMs (there is no guarantee it seeks backwards), which made the
+            // trimmed clip start late and therefore come out shorter than 3 seconds - the "Live Photo
+            // isn't 3 seconds" bug. SEEK_TO_PREVIOUS_SYNC guarantees baseUs <= startUs, so the clip is
+            // always at least the full [startMs, endMs] window (a little longer if the previous
+            // keyframe is further back, which is harmless).
+            extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
 
             ByteBuffer buffer = ByteBuffer.allocate(2 * 1024 * 1024);
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
