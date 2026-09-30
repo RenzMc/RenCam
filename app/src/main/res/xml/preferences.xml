@@ -742,15 +742,16 @@
                 android:icon="@drawable/ic_photo_size_select_large_white_48dp"
                 />
 
-            <!-- RenCam: output aspect ratio for photos (adds 9:16 support). Default keeps the
-                 camera's native aspect ratio; other values centre-crop the photo to a fixed ratio. -->
+            <!-- RenCam: output aspect ratio for photos (adds 9:16 support). Default is 9:16 (portrait)
+                 so photos - and especially the cover of a Live Photo - come out a consistent 9:16;
+                 other values centre-crop the photo to a fixed ratio. -->
             <ListPreference
                 android:key="preference_photo_aspect_ratio"
                 android:title="@string/preference_photo_aspect_ratio"
                 android:summary="@string/preference_photo_aspect_ratio_summary"
                 android:entries="@array/preference_photo_aspect_ratio_entries"
                 android:entryValues="@array/preference_photo_aspect_ratio_values"
-                android:defaultValue="default"
+                android:defaultValue="9:16"
                 android:icon="@drawable/ic_photo_size_select_large_white_48dp"
                 />
 
@@ -1076,15 +1077,16 @@
                 />
 
             <!-- RenCam: output aspect ratio for video (adds 9:16 support for video, including the
-                 video embedded in a Live Photo). Default keeps the camera's native aspect ratio;
-                 other values centre-crop the recorded video to a fixed ratio. -->
+                 video embedded in a Live Photo). Default is 9:16 (portrait) so video - and the motion
+                 inside a Live Photo - comes out a consistent 9:16; other values centre-crop the
+                 recorded video to a fixed ratio. -->
             <ListPreference
                 android:key="preference_video_aspect_ratio"
                 android:title="@string/preference_video_aspect_ratio"
                 android:summary="@string/preference_video_aspect_ratio_summary"
                 android:entries="@array/preference_video_aspect_ratio_entries"
                 android:entryValues="@array/preference_video_aspect_ratio_values"
-                android:defaultValue="default"
+                android:defaultValue="9:16"
                 android:icon="@drawable/take_video_pref"
                 />
 

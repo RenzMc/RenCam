@@ -226,7 +226,9 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
      * camera's native (uncropped) aspect ratio. A value below 1 means a portrait crop (e.g. 9:16).
      */
     public static double getPhotoAspectRatio(SharedPreferences sharedPreferences) {
-        String value = sharedPreferences.getString(PreferenceKeys.PhotoAspectRatioPreferenceKey, "default");
+        // RenCam: default is now 9:16 (portrait) so photos - and the cover of a Live Photo - come out
+        // a consistent 9:16; the "default" entry still means the camera's native (uncropped) ratio.
+        String value = sharedPreferences.getString(PreferenceKeys.PhotoAspectRatioPreferenceKey, "9:16");
         return parseAspectRatio(value);
     }
 
@@ -249,7 +251,9 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
 
     /** RenCam: the user's chosen output aspect ratio for video, or 0 for "default" (native). */
     public static double getVideoAspectRatio(SharedPreferences sharedPreferences) {
-        String value = sharedPreferences.getString(PreferenceKeys.VideoAspectRatioPreferenceKey, "default");
+        // RenCam: default is now 9:16 (portrait) so video - and the motion clip of a Live Photo -
+        // come out a consistent 9:16; the "default" entry still means the native (uncropped) ratio.
+        String value = sharedPreferences.getString(PreferenceKeys.VideoAspectRatioPreferenceKey, "9:16");
         return parseAspectRatio(value);
     }
 

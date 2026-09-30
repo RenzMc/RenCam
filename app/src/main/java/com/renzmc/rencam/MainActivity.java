@@ -270,6 +270,38 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * RenCam: one-time migration of the photo/video output aspect ratio to the new 9:16 default.
+     *
+     * <p>Only runs if the user is still on the old "default" (native) value, and only once (guarded by
+     * a flag), so it never overrides a deliberate choice made afterwards. Live Photos are always 9:16
+     * regardless of this setting; this migration just makes normal photos and videos default to 9:16
+     * as well.</p>
+     */
+    private void migrateAspectRatioTo916() {
+        try {
+            SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+            final String migrated_key = "preference_aspect_ratio_916_migrated";
+            if( sharedPreferences.getBoolean(migrated_key, false) ) {
+                return;
+            }
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            if( "default".equals(sharedPreferences.getString(PreferenceKeys.PhotoAspectRatioPreferenceKey, "default")) ) {
+                editor.putString(PreferenceKeys.PhotoAspectRatioPreferenceKey, "9:16");
+            }
+            if( "default".equals(sharedPreferences.getString(PreferenceKeys.VideoAspectRatioPreferenceKey, "default")) ) {
+                editor.putString(PreferenceKeys.VideoAspectRatioPreferenceKey, "9:16");
+            }
+            editor.putBoolean(migrated_key, true);
+            editor.apply();
+            if( MyDebug.LOG )
+                Log.d(TAG, "migrated output aspect ratio defaults to 9:16");
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to migrate aspect ratio defaults", e);
+        }
+    }
+
     protected void onCreate(Bundle savedInstanceState) {
         long debug_time = 0;
         if( MyDebug.LOG ) {
@@ -283,6 +315,10 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
         PreferenceManager.setDefaultValues(this, R.xml.preferences, false); // initialise any unset preferences to their default values
+        // RenCam: one-time migration so existing installs also pick up the new 9:16 default output
+        // aspect ratio. setDefaultValues() above only fills in *unset* preferences, so an install that
+        // already stored the old "default" (native) value would keep 4:3/16:9 otherwise.
+        migrateAspectRatioTo916();
         if( MyDebug.LOG )
             Log.d(TAG, "onCreate: time after setting default preference values: " + (System.currentTimeMillis() - debug_time));
 

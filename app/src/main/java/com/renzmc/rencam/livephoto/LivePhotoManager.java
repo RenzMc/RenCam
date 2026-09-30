@@ -19,6 +19,7 @@ import com.renzmc.rencam.preview.Preview;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
@@ -80,21 +81,25 @@ public class LivePhotoManager {
      *         that gives the iPhone its distinctive flicker.</li>
      * </ol>
      *
-     * <p>Each pulse lasts at least ~50ms so it is captured by at least one frame of the 30fps video
-     * buffer (a shorter pulse could fall entirely between two frames and never appear in the clip).
-     * The still is sampled during the main flash (see {@link #COVER_DELAY_MS}).</p>
+     * <p>Each pulse must be long enough to be captured by the 30fps video buffer: one frame is
+     * ~33ms, so a pulse shorter than ~66ms can fall almost entirely between two frames and barely
+     * show up in the clip. The flicker in particular was originally only 65ms (~2 frames), which is
+     * why it looked fine in real life but was almost invisible in the recorded video - it has been
+     * lengthened to ~140ms (~4 frames) so the "kedip" is clearly visible in the motion.</p>
+     *
+     * <p>The still is sampled during the main flash (see {@link #COVER_DELAY_MS}).</p>
      */
-    private static final int FLASH_PRE_START_MS = 0;      // pre-flash (metering) starts
-    private static final int FLASH_PRE_END_MS = 50;       // pre-flash ends
-    private static final int FLASH_MAIN_START_MS = 100;   // main flash starts (after a short dark gap)
-    private static final int FLASH_MAIN_END_MS = 165;     // main flash ends
-    private static final int FLASH_FLICKER_START_MS = 215; // flicker (Slow-Sync interval) starts
-    private static final int FLASH_FLICKER_END_MS = 280;  // flicker ends
+    private static final int FLASH_PRE_START_MS = 0;       // pre-flash (metering) starts
+    private static final int FLASH_PRE_END_MS = 50;        // pre-flash ends
+    private static final int FLASH_MAIN_START_MS = 100;    // main flash starts (after a ~1/20s dark gap)
+    private static final int FLASH_MAIN_END_MS = 220;      // main flash ends (~120ms, clearly lit)
+    private static final int FLASH_FLICKER_START_MS = 280; // flicker (Slow-Sync interval) starts
+    private static final int FLASH_FLICKER_END_MS = 420;   // flicker ends (~140ms so it shows in video)
     /**
      * How long after the shutter the cover frame is taken. This is inside the main flash window
      * (FLASH_MAIN_START_MS .. FLASH_MAIN_END_MS), so the still is always lit by the flash.
      */
-    private static final int COVER_DELAY_MS = 130;
+    private static final int COVER_DELAY_MS = 160;
     /**
      * Extra recording time kept after the post-roll before the buffer is stopped. MediaRecorder can
      * drop the last few frames when it is stopped, so we record a little longer than the 3s window
@@ -823,11 +828,17 @@ public class LivePhotoManager {
     }
 
     /**
-     * Finds the timestamp (ms) of the brightest frame in a small window around the expected shutter
-     * time - i.e. the frame lit by the flash burst. Returns -1 if no frame could be sampled.
+     * Finds the timestamp (ms) of the frame lit by the <b>main</b> flash - i.e. the cover moment.
+     * Returns -1 if no frame could be sampled.
+     *
+     * <p>The burst has two bright pulses (the main flash and the trailing flicker), so the single
+     * brightest frame could be either one. We want the main flash - the actual capture moment - so
+     * instead of just taking the brightest frame we take the frame that is nearly as bright as the
+     * brightest but <b>closest to the expected shutter time</b>. That way the still always lands on
+     * the main flash and never on the later flicker.</p>
      */
     private long findFlashFrameMs(File video_file, long expected_ms) {
-        // The flash burst lights the scene from about 125ms to 420ms after the shutter, and the still
+        // The flash burst lights the scene from about 100ms to 420ms after the shutter, and the still
         // is expected a little after the shutter; search a window that comfortably covers that (plus a
         // little slack for timeline drift).
         final long window_before = 150L;
@@ -843,8 +854,10 @@ public class LivePhotoManager {
         if( end <= start ) {
             return -1L;
         }
-        long best_ms = -1L;
-        double best_brightness = -1.0;
+        // Sample the window once, remembering each frame's brightness.
+        ArrayList<Long> times = new ArrayList<>();
+        ArrayList<Double> brightnesses = new ArrayList<>();
+        double max_brightness = -1.0;
         for( long t = start; t <= end; t += step ) {
             Bitmap frame = LivePhotoHelper.extractVideoFrame(context, uri, t);
             if( frame == null ) {
@@ -857,9 +870,28 @@ public class LivePhotoManager {
             finally {
                 frame.recycle();
             }
-            if( brightness > best_brightness ) {
-                best_brightness = brightness;
-                best_ms = t;
+            times.add(t);
+            brightnesses.add(brightness);
+            if( brightness > max_brightness ) {
+                max_brightness = brightness;
+            }
+        }
+        if( times.isEmpty() ) {
+            return -1L;
+        }
+        // Among the frames that are nearly as bright as the brightest (both flash pulses qualify),
+        // pick the one closest to the expected shutter time - that is the main flash.
+        final double threshold = max_brightness * 0.92;
+        long best_ms = -1L;
+        long best_dist = Long.MAX_VALUE;
+        for( int i = 0; i < times.size(); i++ ) {
+            if( brightnesses.get(i) < threshold ) {
+                continue;
+            }
+            long dist = Math.abs(times.get(i) - expected_ms);
+            if( dist < best_dist ) {
+                best_dist = dist;
+                best_ms = times.get(i);
             }
         }
         return best_ms;
@@ -941,24 +973,11 @@ public class LivePhotoManager {
      * saved with the video's own aspect ratio).
      */
     private double getTargetStillAspectRatio() {
-        // RenCam: if the user has chosen a fixed output aspect ratio, leave the cover uncropped here
-        // and let ImageSaver apply the final crop - that way the cover is only cropped once and ends
-        // up at exactly the chosen ratio (e.g. a portrait 9:16).
-        if( com.renzmc.rencam.MyApplicationInterface.getPhotoAspectRatio(sharedPreferences, getCameraId()) > 0.0 ) {
-            return 0.0;
-        }
-        try {
-            CameraController controller = preview != null ? preview.getCameraController() : null;
-            if( controller != null ) {
-                CameraController.Size size = controller.getPictureSize();
-                if( size != null && size.width > 0 && size.height > 0 ) {
-                    return (double) size.width / (double) size.height;
-                }
-            }
-        }
-        catch(Exception e) {
-            Log.e(TAG, "failed to get picture size for cover crop", e);
-        }
+        // RenCam Live Photo: the cover still is ALWAYS 9:16 (see ImageSaver, which forces the crop to
+        // 9:16 for a Live Photo cover). We therefore never crop the cover here - cropping it to the
+        // camera's picture size ratio (e.g. 4:3) would make the still a different shape from the
+        // 9:16 motion video (the "video 9:16 but photo 4:3" bug). Leaving it uncropped also means the
+        // cover is only cropped once (in ImageSaver), so there is no quality loss from a double crop.
         return 0.0;
     }
 
@@ -968,11 +987,11 @@ public class LivePhotoManager {
      * the dedicated video aspect ratio. Returns 0 when neither is set (no crop).
      */
     private double getTargetVideoAspectRatio() {
-        double photo_ratio = com.renzmc.rencam.MyApplicationInterface.getPhotoAspectRatio(sharedPreferences, getCameraId());
-        if( photo_ratio > 0.0 ) {
-            return photo_ratio;
-        }
-        return com.renzmc.rencam.MyApplicationInterface.getVideoAspectRatio(sharedPreferences);
+        // RenCam Live Photo: the embedded motion video is ALWAYS cropped to 9:16, so it matches the
+        // 9:16 cover still. This guarantees a Live Photo is a consistent 9:16 no matter what photo /
+        // video aspect ratio (or resolution) the user has selected - previously the video could be
+        // 9:16 while the cover stayed 4:3, or the whole thing came out 16:9.
+        return 9.0 / 16.0;
     }
 
     /** The camera id currently in use, or 0 if the preview isn't available. */

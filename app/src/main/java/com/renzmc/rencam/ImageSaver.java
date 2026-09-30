@@ -934,6 +934,13 @@ public class ImageSaver extends Thread {
         request.live_photo_cover = this.live_photo_cover;
         // RenCam: capture the chosen output aspect ratio now (0 = native/uncropped).
         request.aspect_ratio = main_activity.getApplicationInterface().getPhotoAspectRatio();
+        if( request.live_photo_cover ) {
+            // RenCam Live Photo: a Live Photo must always be a consistent 9:16 - the cover still has
+            // to match the embedded motion video, otherwise the photo comes out 4:3/3:4/16:9 while
+            // the video is 9:16 (the "ukuran aneh-aneh" bug). Force the cover to 9:16 here, applied
+            // literally (cropToAspectRatio() produces a portrait 9:16 from any input orientation).
+            request.aspect_ratio = 9.0 / 16.0;
+        }
 
         if( do_in_background ) {
             if( MyDebug.LOG )
