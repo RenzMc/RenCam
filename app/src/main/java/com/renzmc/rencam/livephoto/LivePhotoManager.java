@@ -67,15 +67,19 @@ public class LivePhotoManager {
      * short pre-flash (for metering / eye adaptation) followed by the main flash - the same
      * "double blink" an iPhone does. The still frame is sampled during the main flash, so the key
      * photo is always taken exactly at the moment the scene is lit.
+     *
+     * <p>The values are tuned so the two flashes read as a distinct "blink-blink" rather than one
+     * continuous light: the pre-flash is deliberately short, the dark gap between the two is wide
+     * enough to be seen (at 30fps the gap spans ~2 frames), and the main flash is the dominant one.
      */
-    private static final int FLASH_PRE_MS = 80;         // pre-flash ends
-    private static final int FLASH_MAIN_START_MS = 150; // main flash starts
-    private static final int FLASH_BURST_MS = 700;      // main flash ends
+    private static final int FLASH_PRE_MS = 45;         // pre-flash ends (short metering flash)
+    private static final int FLASH_MAIN_START_MS = 125; // main flash starts (after a clear dark gap)
+    private static final int FLASH_BURST_MS = 420;      // main flash ends
     /**
      * How long after the shutter the cover frame is taken. This is inside the main flash window
      * (FLASH_MAIN_START_MS .. FLASH_BURST_MS), so the still is always lit by the flash.
      */
-    private static final int COVER_DELAY_MS = 250;
+    private static final int COVER_DELAY_MS = 200;
     /**
      * Extra recording time kept after the post-roll before the buffer is stopped. MediaRecorder can
      * drop the last few frames when it is stopped, so we record a little longer than the 3s window
@@ -731,12 +735,12 @@ public class LivePhotoManager {
      * time - i.e. the frame lit by the flash burst. Returns -1 if no frame could be sampled.
      */
     private long findFlashFrameMs(File video_file, long expected_ms) {
-        // The flash burst lights the scene from about 150ms to 700ms after the shutter, and the still
+        // The flash burst lights the scene from about 125ms to 420ms after the shutter, and the still
         // is expected a little after the shutter; search a window that comfortably covers that (plus a
         // little slack for timeline drift).
         final long window_before = 150L;
         final long window_after = 550L;
-        final long step = 70L;
+        final long step = 60L;
         Uri uri = Uri.fromFile(video_file);
         long duration = LivePhotoHelper.getVideoDuration(context, uri);
         long start = Math.max(0L, expected_ms - window_before);
