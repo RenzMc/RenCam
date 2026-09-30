@@ -128,19 +128,23 @@
         android:visibility="gone"
         />
 
-    <!-- RenCam: small "LIVE" badge shown when Live Photo mode is active -->
+    <!-- RenCam: small "LIVE" badge shown when Live Photo mode is active. It doubles as a quick
+        on/off toggle, so it is given a comfortable minimum tap target (rather than a tiny pill). -->
     <TextView
         android:id="@+id/live_photo_indicator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingLeft="8dp"
-        android:paddingRight="8dp"
-        android:paddingTop="2dp"
-        android:paddingBottom="2dp"
+        android:minWidth="64dp"
+        android:minHeight="34dp"
+        android:gravity="center"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
         android:background="@drawable/live_photo_indicator_background"
         android:text="@string/live_photo_indicator"
         android:textColor="#FFFFFF"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:textStyle="bold"
         android:contentDescription="@string/live_photo_mode_active"
         android:visibility="gone"

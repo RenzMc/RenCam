@@ -588,22 +588,23 @@ public class MainUI {
             view.setLayoutParams(layoutParams);
             setViewRotation(view, ui_rotation);
 
-            // RenCam: the "LIVE" badge sits just above the shutter button, centred on the same axis
+            // RenCam: the "LIVE" badge is a quick on/off toggle. It used to be anchored above the
+            // shutter button (ui_independent_above == the same slot as switch_camera), so it
+            // overlapped the camera-switch button and was hard to tap. Put it in the top-left corner
+            // of the screen instead (bottom-left in landscape), well clear of the other controls.
             view = main_activity.findViewById(R.id.live_photo_indicator);
             layoutParams = (RelativeLayout.LayoutParams)view.getLayoutParams();
-            layoutParams.addRule(align_parent_left, 0);
+            layoutParams.addRule(align_parent_left, RelativeLayout.TRUE);
+            layoutParams.addRule(align_parent_bottom, RelativeLayout.TRUE);
             layoutParams.addRule(align_parent_right, 0);
             layoutParams.addRule(align_parent_top, 0);
-            layoutParams.addRule(align_parent_bottom, 0);
-            layoutParams.addRule(center_vertical, RelativeLayout.TRUE);
-            layoutParams.addRule(center_horizontal, 0);
-            layoutParams.addRule(ui_independent_above, R.id.take_photo);
+            layoutParams.addRule(ui_independent_above, 0);
             layoutParams.addRule(ui_independent_below, 0);
             layoutParams.addRule(ui_independent_left_of, 0);
             layoutParams.addRule(ui_independent_right_of, 0);
             {
-                int margin = (int) (6 * scale + 0.5f); // convert dps to pixels
-                setMarginsForSystemUI(layoutParams, 0, 0, navigation_gap + margin, 0);
+                int margin = (int) (12 * scale + 0.5f); // convert dps to pixels
+                setMarginsForSystemUI(layoutParams, margin, 0, 0, margin);
             }
             view.setLayoutParams(layoutParams);
             setViewRotation(view, ui_rotation);
