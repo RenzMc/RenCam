@@ -6,6 +6,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaMuxer;
 import android.util.Log;
 
@@ -203,10 +204,13 @@ public class VideoCropper {
                     if( !dec_eos ) {
                         Image src_img = decoder.getOutputImage(dec_index);
                         if( src_img != null ) {
-                            int enc_index;
-                            do {
-                                enc_index = encoder.dequeueInputBuffer(TIMEOUT_US);
-                            } while( enc_index < 0 );
+                            int enc_index = dequeueInputBuffer(encoder);
+                            if( enc_index < 0 ) {
+                                Log.e(TAG, "encoder gave no input buffer");
+                                src_img.close();
+                                decoder.releaseOutputBuffer(dec_index, false);
+                                return false;
+                            }
                             Image dst_img = encoder.getInputImage(enc_index);
                             if( dst_img != null ) {
                                 cropIntoImage(src_img, dst_img, crop_x, crop_y, crop_src_w, crop_src_h);
@@ -327,6 +331,17 @@ public class VideoCropper {
             output.delete();
         }
         return success;
+    }
+
+    /** Waits (bounded) for an input buffer so a stalled encoder can never spin forever. */
+    private static int dequeueInputBuffer(MediaCodec codec) {
+        for( int i = 0; i < 200; i++ ) { // ~2s at 10ms per attempt
+            int index = codec.dequeueInputBuffer(TIMEOUT_US);
+            if( index >= 0 ) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     /** Copies the cropped region of every plane of {@code src} into {@code dst}, honouring each
