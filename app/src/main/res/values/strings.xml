@@ -1110,6 +1110,7 @@
     <string name="live_photo_hold_steady">Hold the camera steady for Live Photo</string>
     <string name="live_photo_mode_fallback">Live Photo needs Standard capture \u2014 this photo mode is not available while Live Photo is on</string>
     <string name="live_photo_buffer_unavailable">Live Photo is not ready \u2014 taking a normal photo</string>
+    <string name="live_photo_queued">Live Photo queued \u2014 it will be captured next</string>
 
     <!-- Language settings -->
     <string name="preference_category_language">Language</string>

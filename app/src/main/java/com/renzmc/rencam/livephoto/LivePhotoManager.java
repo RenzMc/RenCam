@@ -88,6 +88,20 @@ public class LivePhotoManager {
      */
     private static final int BUFFER_MAX_MS = 30000;
 
+    /**
+     * How long we wait for the cover still to be saved before giving up and freeing the pending
+     * video. Without this, a still that failed to save (or whose save callback never arrived) would
+     * leave {@link #waiting_for_cover} stuck true forever, which made every following shutter press
+     * get swallowed - the "took 5 photos but only 1-2 were saved" bug.
+     */
+    private static final long WAITING_FOR_COVER_TIMEOUT_MS = 12000L;
+
+    /**
+     * Maximum number of shutter presses that can be queued while a Live Photo is still finishing.
+     * Each queued press is captured as soon as the buffer is ready again, so no photo is ever lost.
+     */
+    private static final int MAX_PENDING_CAPTURES = 20;
+
     private final Context context;
     private final SharedPreferences sharedPreferences;
     private Preview preview;
@@ -115,6 +129,14 @@ public class LivePhotoManager {
     private long pending_presentation_us;
     /** How far into the buffer the shutter was pressed (ms). */
     private long shutter_offset_ms;
+
+    /**
+     * Shutter presses received while a Live Photo was still being recorded/processed. They are
+     * captured as soon as the buffer is ready again, so rapid shots are never silently dropped.
+     */
+    private int pending_captures = 0;
+    /** Fires if the cover still doesn't get saved in time, so {@link #waiting_for_cover} can't stick. */
+    private Runnable waiting_timeout_runnable;
 
     private Runnable post_roll_runnable;
     /** Adaptive post-roll used for the current capture (ms after the shutter). */
@@ -259,6 +281,9 @@ public class LivePhotoManager {
         scheduleBufferCap();
         if( MyDebug.LOG )
             Log.d(TAG, "live photo buffer started");
+        // If the user pressed the shutter while the previous Live Photo was still finishing, the
+        // press is queued (see captureLivePhoto()); now that the buffer is running again, capture it.
+        maybeStartPendingCapture();
         return true;
     }
 
@@ -345,8 +370,17 @@ public class LivePhotoManager {
             return false;
         }
         if( capturing || waiting_for_cover ) {
-            if( MyDebug.LOG )
-                Log.d(TAG, "live photo already in progress - swallowing shutter press");
+            // A Live Photo is still being recorded/processed. Instead of silently swallowing the
+            // press (which lost photos when the user shot a quick burst), queue it so it is captured
+            // as soon as the buffer is ready again (see maybeStartPendingCapture()).
+            if( pending_captures < MAX_PENDING_CAPTURES ) {
+                pending_captures++;
+                if( MyDebug.LOG )
+                    Log.d(TAG, "live photo in progress - queued shutter press, pending=" + pending_captures);
+                if( host != null ) {
+                    host.showToast(R.string.live_photo_queued);
+                }
+            }
             return true;
         }
         if( preview == null || preview.getCameraController() == null ) {
@@ -376,6 +410,19 @@ public class LivePhotoManager {
                 }
                 return false;
             }
+        }
+        startCaptureInternal();
+        return true;
+    }
+
+    /**
+     * Starts a Live Photo capture using the already-running buffer. Separated from
+     * {@link #captureLivePhoto()} so a queued press (or the pending-capture drain) can start a
+     * capture without re-running the "is a capture already in progress" checks.
+     */
+    private synchronized void startCaptureInternal() {
+        if( capturing || waiting_for_cover || !buffer_running ) {
+            return;
         }
         shutter_offset_ms = SystemClock.elapsedRealtime() - buffer_start_ms;
         if( MyDebug.LOG )
@@ -420,7 +467,69 @@ public class LivePhotoManager {
         // Record a little past the trim window (see RECORD_MARGIN_MS) so the last frames are flushed
         // and the trimmed clip still reaches the full 3 seconds.
         handler.postDelayed(post_roll_runnable, post_roll_ms + RECORD_MARGIN_MS);
-        return true;
+    }
+
+    /**
+     * If a shutter press was queued while a Live Photo was finishing, and the buffer is now running
+     * again, capture it. Runs on the UI thread and re-checks the state so it is safe to call from any
+     * point where the buffer may have just (re)started.
+     */
+    private void maybeStartPendingCapture() {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                boolean start = false;
+                synchronized( LivePhotoManager.this ) {
+                    if( pending_captures > 0 && !capturing && !waiting_for_cover && buffer_running
+                            && isActive() && preview != null && !preview.isVideo()
+                            && preview.isPreviewStarted() ) {
+                        pending_captures--;
+                        start = true;
+                    }
+                }
+                if( start ) {
+                    if( MyDebug.LOG )
+                        Log.d(TAG, "starting queued Live Photo capture");
+                    startCaptureInternal();
+                }
+            }
+        });
+    }
+
+    /**
+     * Arms the safety timeout that fires if the cover still never gets saved (e.g. the save failed,
+     * or its callback was lost). Without this, {@link #waiting_for_cover} could stay true forever and
+     * swallow every following shutter press - the "took 5 photos but only 1-2 were saved" bug.
+     */
+    private void scheduleWaitingTimeout() {
+        cancelWaitingTimeout();
+        waiting_timeout_runnable = new Runnable() {
+            @Override
+            public void run() {
+                File to_delete = null;
+                synchronized( LivePhotoManager.this ) {
+                    waiting_timeout_runnable = null;
+                    if( waiting_for_cover ) {
+                        Log.w(TAG, "timed out waiting for cover still to save - freeing pending video");
+                        waiting_for_cover = false;
+                        to_delete = pending_video_file;
+                        pending_video_file = null;
+                    }
+                }
+                deleteQuietly(to_delete);
+                // The buffer may already be running again, so drain any queued shutter press now.
+                maybeStartPendingCapture();
+            }
+        };
+        handler.postDelayed(waiting_timeout_runnable, WAITING_FOR_COVER_TIMEOUT_MS);
+    }
+
+    /** Cancels the safety timeout armed by {@link #scheduleWaitingTimeout()}. */
+    private void cancelWaitingTimeout() {
+        if( waiting_timeout_runnable != null ) {
+            handler.removeCallbacks(waiting_timeout_runnable);
+            waiting_timeout_runnable = null;
+        }
     }
 
     /** Called once the post-roll has elapsed: stop the buffer, trim it and extract the cover frame. */
@@ -527,6 +636,7 @@ public class LivePhotoManager {
             pending_video_file = source;
             pending_presentation_us = cover_ms * 1000L;
             waiting_for_cover = true;
+            scheduleWaitingTimeout();
         }
 
         // Save the cover on the main thread, as saveImage() touches UI-related state.
@@ -739,10 +849,13 @@ public class LivePhotoManager {
         if( !waiting_for_cover ) {
             return;
         }
+        cancelWaitingTimeout();
         waiting_for_cover = false;
         final File video_file = pending_video_file;
         final long presentation_us = pending_presentation_us;
         pending_video_file = null;
+        // The buffer is likely running again by now; capture any press the user queued meanwhile.
+        maybeStartPendingCapture();
         if( video_file == null || stillFile == null || !stillFile.exists() ) {
             deleteQuietly(video_file);
             return;
@@ -760,10 +873,13 @@ public class LivePhotoManager {
         if( !waiting_for_cover ) {
             return;
         }
+        cancelWaitingTimeout();
         waiting_for_cover = false;
         final File video_file = pending_video_file;
         final long presentation_us = pending_presentation_us;
         pending_video_file = null;
+        // The buffer is likely running again by now; capture any press the user queued meanwhile.
+        maybeStartPendingCapture();
         if( video_file == null || stillUri == null ) {
             deleteQuietly(video_file);
             return;
@@ -782,9 +898,11 @@ public class LivePhotoManager {
         }
         cancelFlashSteps();
         cancelBufferCap();
+        cancelWaitingTimeout();
         capturing = false;
         waiting_for_cover = false;
         pending_video_file = null;
+        pending_captures = 0;
         stopFlashBurst();
         if( preview != null && preview.isLivePhotoBuffering() ) {
             File file = preview.stopLivePhotoBuffer();
