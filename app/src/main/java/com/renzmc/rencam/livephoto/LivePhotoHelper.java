@@ -79,11 +79,25 @@ public final class LivePhotoHelper {
             return false;
         }
         try (InputStream in = new java.io.FileInputStream(file)) {
-            byte[] buffer = new byte[64 * 1024];
+            // RenCam fix: the previous version scanned each 64KB chunk independently, so an "ftyp"
+            // signature that straddled a chunk boundary was never found -> the packaged file was
+            // wrongly rejected and the plain JPEG was left behind (the "sometimes it isn't a Live
+            // Photo" bug). We now carry the last (FTYP.length - 1) bytes of each chunk over to the
+            // front of the next one, so a signature split across the boundary is still detected.
+            final int chunk = 64 * 1024;
+            final int overlap = FTYP.length - 1;
+            byte[] buffer = new byte[chunk + overlap];
+            int carry = 0;
             int read;
-            while ((read = in.read(buffer)) > 0) {
-                if (findSubarray(buffer, FTYP) != -1) {
+            while ((read = in.read(buffer, carry, chunk)) > 0) {
+                int total = carry + read;
+                if (findSubarray(buffer, FTYP, total) != -1) {
                     return true;
+                }
+                // Keep the tail of this chunk so a signature split across the boundary is seen.
+                carry = Math.min(overlap, total);
+                if (carry > 0) {
+                    System.arraycopy(buffer, total - carry, buffer, 0, carry);
                 }
             }
         }
@@ -800,11 +814,17 @@ public final class LivePhotoHelper {
     }
 
     private static int findSubarray(byte[] array, byte[] pattern) {
-        if (pattern.length > array.length) {
+        return findSubarray(array, pattern, array.length);
+    }
+
+    /** As {@link #findSubarray(byte[], byte[])} but only searches the first {@code limit} bytes. */
+    private static int findSubarray(byte[] array, byte[] pattern, int limit) {
+        if (pattern.length > limit) {
             return -1;
         }
+        int end = Math.min(limit, array.length);
         outer:
-        for (int i = 0; i <= array.length - pattern.length; i++) {
+        for (int i = 0; i <= end - pattern.length; i++) {
             for (int j = 0; j < pattern.length; j++) {
                 if (array[i + j] != pattern[j]) {
                     continue outer;

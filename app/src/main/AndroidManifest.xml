@@ -31,6 +31,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- RenCam Live Photo: keeps the process alive while a Live Photo is being finalised in the
+         background (trim + cover extraction + save + packaging into a Motion Photo). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <uses-feature android:name="android.hardware.camera" />
     <uses-feature android:name="android.hardware.microphone" />
@@ -168,6 +172,14 @@
             android:enabled="true"
             android:exported="false"
             />
+
+        <!-- RenCam Live Photo: foreground service that keeps the process alive while a Live Photo is
+             finalised in the background. foregroundServiceType is only meaningful on API 29+. -->
+        <service
+            android:name="com.renzmc.rencam.livephoto.LivePhotoService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            tools:targetApi="q" />
 
         <!-- RenCam in-app gallery (shows Live Photo thumbnails and previews) -->
         <activity
