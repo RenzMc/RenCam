@@ -290,6 +290,11 @@ public class PreferenceKeys {
 
     public static final String ShowCropGuidePreferenceKey = "preference_crop_guide";
 
+    // RenCam: output aspect ratio for photos (and Live Photo covers). "default" keeps the camera's
+    // native aspect ratio; other values centre-crop the photo to that fixed ratio (e.g. "9:16" always
+    // produces a portrait 9:16 photo, regardless of how the phone is held).
+    public static final String PhotoAspectRatioPreferenceKey = "preference_photo_aspect_ratio";
+
     public static final String FaceDetectionPreferenceKey = "preference_face_detection";
 
     public static final String GhostImagePreferenceKey = "preference_ghost_image";

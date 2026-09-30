@@ -221,6 +221,42 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
     }
 
     /** Returns the RenCam Live Photo manager, creating it lazily on first use. */
+    /**
+     * RenCam: the output aspect ratio (width/height) the user has chosen for photos, or 0 for the
+     * camera's native (uncropped) aspect ratio. A value below 1 means a portrait crop (e.g. 9:16).
+     */
+    public static double getPhotoAspectRatio(SharedPreferences sharedPreferences) {
+        String value = sharedPreferences.getString(PreferenceKeys.PhotoAspectRatioPreferenceKey, "default");
+        return parseAspectRatio(value);
+    }
+
+    /** Instance wrapper for {@link #getPhotoAspectRatio(SharedPreferences)}. */
+    public double getPhotoAspectRatio() {
+        return getPhotoAspectRatio(sharedPreferences);
+    }
+
+    /** Parses an aspect ratio preference value such as "16:9" or "9:16" into width/height, or 0. */
+    public static double parseAspectRatio(String value) {
+        if( value == null || value.equals("default") ) {
+            return 0.0;
+        }
+        int idx = value.indexOf(':');
+        if( idx <= 0 ) {
+            return 0.0;
+        }
+        try {
+            double w = Double.parseDouble(value.substring(0, idx).trim());
+            double h = Double.parseDouble(value.substring(idx + 1).trim());
+            if( w > 0.0 && h > 0.0 ) {
+                return w / h;
+            }
+        }
+        catch(NumberFormatException e) {
+            // ignore - fall through to 0 (native)
+        }
+        return 0.0;
+    }
+
     public LivePhotoManager getLivePhotoManager() {
         if( livePhotoManager == null ) {
             livePhotoManager = new LivePhotoManager(main_activity, sharedPreferences, main_activity.getPreview());

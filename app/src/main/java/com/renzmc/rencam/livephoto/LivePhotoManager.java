@@ -824,6 +824,12 @@ public class LivePhotoManager {
      * saved with the video's own aspect ratio).
      */
     private double getTargetStillAspectRatio() {
+        // RenCam: if the user has chosen a fixed output aspect ratio, leave the cover uncropped here
+        // and let ImageSaver apply the final crop - that way the cover is only cropped once and ends
+        // up at exactly the chosen ratio (e.g. a portrait 9:16).
+        if( com.renzmc.rencam.MyApplicationInterface.getPhotoAspectRatio(sharedPreferences) > 0.0 ) {
+            return 0.0;
+        }
         try {
             CameraController controller = preview != null ? preview.getCameraController() : null;
             if( controller != null ) {

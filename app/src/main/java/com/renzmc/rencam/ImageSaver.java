@@ -201,6 +201,9 @@ public class ImageSaver extends Thread {
         // filename must end with "MP" (required by the Google Motion Photo spec, otherwise readers
         // such as WhatsApp may ignore the embedded video).
         boolean live_photo_cover = false;
+        // RenCam: output aspect ratio (width/height) to centre-crop the photo to, or 0 to leave the
+        // photo at the camera's native aspect ratio. A value < 1 means a portrait crop (e.g. 9:16).
+        double aspect_ratio = 0.0;
 
         Request(Type type,
                 ProcessType process_type,
@@ -929,6 +932,8 @@ public class ImageSaver extends Thread {
         // RenCam Live Photo: capture the flag now (synchronously) so the background saver thread
         // still knows this request is a Live Photo cover even after the caller resets the flag.
         request.live_photo_cover = this.live_photo_cover;
+        // RenCam: capture the chosen output aspect ratio now (0 = native/uncropped).
+        request.aspect_ratio = main_activity.getApplicationInterface().getPhotoAspectRatio();
 
         if( do_in_background ) {
             if( MyDebug.LOG )
@@ -2483,11 +2488,80 @@ public class ImageSaver extends Thread {
                 throw new IOException();
             }
         }
+        if( request.aspect_ratio > 0.0 ) {
+            // RenCam: crop the photo to the user's chosen output aspect ratio. This keeps the saved
+            // photo at a fixed shape (e.g. 9:16) no matter how the phone is held - without it a 9:16
+            // photo silently turns into 16:9 the moment the phone is rotated to landscape.
+            if( bitmap == null ) {
+                if( MyDebug.LOG )
+                    Log.d(TAG, "need to decode bitmap to crop to aspect ratio");
+                bitmap = loadBitmapWithRotation(data, true);
+                if( bitmap == null ) {
+                    // if we can't load the bitmap we can't crop - don't want to continue
+                    System.gc();
+                    throw new IOException();
+                }
+            }
+            bitmap = cropToAspectRatio(bitmap, request.aspect_ratio);
+            if( MyDebug.LOG ) {
+                Log.d(TAG, "Save single image performance: time after aspect ratio crop: " + (System.currentTimeMillis() - time_s));
+            }
+        }
         bitmap = stampImage(request, data, bitmap);
         if( MyDebug.LOG ) {
             Log.d(TAG, "Save single image performance: time after photostamp: " + (System.currentTimeMillis() - time_s));
         }
         return new PostProcessBitmapResult(bitmap);
+    }
+
+    /**
+     * RenCam: centre-crops the bitmap to the given output aspect ratio (width/height). A ratio below 1
+     * produces a portrait image (e.g. 9:16 = 0.5625), a ratio above 1 a landscape one (e.g. 16:9 =
+     * 1.777). The ratio is applied literally, so a "9:16" photo always comes out portrait even if the
+     * phone is held in landscape. Returns the original bitmap if it already has (close to) the
+     * requested ratio; otherwise the original is recycled and a new cropped bitmap is returned.
+     */
+    private Bitmap cropToAspectRatio(Bitmap bitmap, double aspect_ratio) {
+        if( bitmap == null || aspect_ratio <= 0.0 ) {
+            return bitmap;
+        }
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        if( width <= 0 || height <= 0 ) {
+            return bitmap;
+        }
+        double current = (double) width / (double) height;
+        if( Math.abs(current - aspect_ratio) < 0.01 ) {
+            // already the right shape - nothing to do
+            return bitmap;
+        }
+        int new_width = width;
+        int new_height = height;
+        if( current > aspect_ratio ) {
+            // too wide - crop the sides
+            new_width = (int) Math.round(height * aspect_ratio);
+        }
+        else {
+            // too tall - crop the top and bottom
+            new_height = (int) Math.round(width / aspect_ratio);
+        }
+        new_width = Math.max(1, Math.min(width, new_width));
+        new_height = Math.max(1, Math.min(height, new_height));
+        int x = (width - new_width) / 2;
+        int y = (height - new_height) / 2;
+        try {
+            Bitmap cropped = Bitmap.createBitmap(bitmap, x, y, new_width, new_height);
+            if( cropped != bitmap ) {
+                // the caller of saveSingleImageNow() only ever recycles the bitmap we return, so the
+                // intermediate (original) bitmap must be released here to avoid leaking it.
+                bitmap.recycle();
+            }
+            return cropped;
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to crop image to aspect ratio", e);
+            return bitmap;
+        }
     }
 
     /** May be run in saver thread or picture callback thread (depending on whether running in background).
