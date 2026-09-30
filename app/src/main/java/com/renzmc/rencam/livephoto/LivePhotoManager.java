@@ -108,6 +108,24 @@ public class LivePhotoManager {
     private LivePhotoHost host;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
+    /**
+     * RenCam: a dedicated single-thread executor that runs <b>all</b> Live Photo finalization
+     * (trimming the buffer, extracting the cover frame, saving the still and packaging the Motion
+     * Photo) in the background. Running the whole pipeline here - instead of on the main thread or on
+     * ad-hoc threads - means the processing never blocks the UI, is serialized (no two captures
+     * trample each other) and keeps working even while the activity is paused or the preview is
+     * reconnecting. It is a daemon thread so it can never keep the process alive.
+     */
+    private final java.util.concurrent.ExecutorService finalize_executor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(new java.util.concurrent.ThreadFactory() {
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "LivePhotoFinalize");
+                    t.setDaemon(true);
+                    return t;
+                }
+            });
+
     // ---- Continuous buffer state -----------------------------------------------------------------
     /** True while the background video buffer is recording. */
     private volatile boolean buffer_running;
@@ -567,14 +585,15 @@ public class LivePhotoManager {
             return;
         }
 
-        new Thread(new Runnable() {
+        // Run the whole finalization pipeline on the dedicated background executor (see
+        // finalize_executor) so it never blocks the UI and keeps working while the activity is paused.
+        finalize_executor.execute(new Runnable() {
             @Override
             public void run() {
                 processCapturedVideo(video_file, offset_ms, post_roll, flash_used);
             }
-        }, "LivePhotoProcessor").start();
+        });
     }
-
     /**
      * Trims the recorded buffer down to the {@code [shutter-1.5s, shutter+1.5s]} window, extracts the
      * cover frame at the shutter timestamp, and hands it to the host to be saved.
@@ -639,8 +658,10 @@ public class LivePhotoManager {
             scheduleWaitingTimeout();
         }
 
-        // Save the cover on the main thread, as saveImage() touches UI-related state.
-        handler.post(new Runnable() {
+        // Save the cover on the background finalization executor (saveImage() is designed to be
+        // called off the main thread - normal captures call it from the camera callback thread), so
+        // the whole Live Photo pipeline runs in the background and the UI is never blocked.
+        finalize_executor.execute(new Runnable() {
             @Override
             public void run() {
                 boolean ok = host != null && host.saveLivePhotoCover(cover, new Date());
@@ -930,7 +951,7 @@ public class LivePhotoManager {
     /** Runs the (potentially slow) packaging on a background thread. */
     private void startPackaging(final File still_file, final Uri still_uri, final File video_file,
                                 final long presentation_us) {
-        new Thread(new Runnable() {
+        finalize_executor.execute(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -948,7 +969,7 @@ public class LivePhotoManager {
                     deleteQuietly(video_file);
                 }
             }
-        }, "LivePhotoPackager").start();
+        });
     }
 
     /** Packages the still (a plain file) in place, replacing it with the Motion Photo. */
