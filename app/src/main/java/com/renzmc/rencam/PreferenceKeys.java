@@ -295,6 +295,12 @@ public class PreferenceKeys {
     // produces a portrait 9:16 photo, regardless of how the phone is held).
     public static final String PhotoAspectRatioPreferenceKey = "preference_photo_aspect_ratio";
 
+    // RenCam: output aspect ratio for video (adds 9:16 support for video, including the video that
+    // is embedded in a Live Photo). "default" keeps the camera's native aspect ratio; other values
+    // centre-crop the recorded video to that fixed ratio (e.g. "9:16" always produces a portrait
+    // 9:16 video).
+    public static final String VideoAspectRatioPreferenceKey = "preference_video_aspect_ratio";
+
     public static final String FaceDetectionPreferenceKey = "preference_face_detection";
 
     public static final String GhostImagePreferenceKey = "preference_ghost_image";

@@ -1,6 +1,7 @@
 package com.renzmc.rencam.preview;
 
 import com.renzmc.rencam.cameracontroller.RawImage;
+import com.renzmc.rencam.livephoto.VideoCropper;
 //import com.renzmc.rencam.MainActivity;
 import com.renzmc.rencam.MainActivity;
 import com.renzmc.rencam.MyDebug;
@@ -68,6 +69,7 @@ import android.os.Build;
 import android.os.Bundle;
 //import android.os.Environment;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
@@ -1232,7 +1234,28 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         applicationInterface.cameraInOperation(false, true);
         reconnectCamera(false); // n.b., if something went wrong with video, then we reopen the camera - which may fail (or simply not reopen, e.g., if app is now paused)
         videoFileInfo.close();
-        applicationInterface.stoppedVideo(videoFileInfo.video_method, videoFileInfo.video_uri, videoFileInfo.video_filename);
+        final ApplicationInterface.VideoMethod stopped_video_method = videoFileInfo.video_method;
+        final Uri stopped_video_uri = videoFileInfo.video_uri;
+        final String stopped_video_filename = videoFileInfo.video_filename;
+        final double video_aspect_ratio = applicationInterface.getVideoAspectRatio();
+        if( video_aspect_ratio > 0.0 && stopped_video_method == ApplicationInterface.VideoMethod.FILE && stopped_video_filename != null ) {
+            // RenCam: crop the finished video to the chosen aspect ratio (e.g. 9:16) in the
+            // background, then finish as usual. Best-effort: on failure the original video is kept.
+            new Thread(new Runnable() {
+                public void run() {
+                    cropVideoInPlace(new File(stopped_video_filename), video_aspect_ratio);
+                    Runnable finish = new Runnable() {
+                        public void run() {
+                            applicationInterface.stoppedVideo(stopped_video_method, stopped_video_uri, stopped_video_filename);
+                        }
+                    };
+                    new Handler(Looper.getMainLooper()).post(finish);
+                }
+            }, "RenCamVideoCrop").start();
+        }
+        else {
+            applicationInterface.stoppedVideo(stopped_video_method, stopped_video_uri, stopped_video_filename);
+        }
         if( nextVideoFileInfo != null ) {
             // if nextVideoFileInfo is not-null, it means we received MEDIA_RECORDER_INFO_MAX_FILESIZE_APPROACHING but not
             // MEDIA_RECORDER_INFO_NEXT_OUTPUT_FILE_STARTED, so it is the application responsibility to create the zero-size
@@ -1244,6 +1267,50 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         }
         videoFileInfo = new VideoFileInfo();
         nextVideoFileInfo = null;
+    }
+
+    /** RenCam: centre-crops a saved video file to the given aspect ratio, in place. Best-effort -
+     *  any failure leaves the original file untouched. */
+    private void cropVideoInPlace(File file, double aspect_ratio) {
+        if( file == null || !file.exists() ) {
+            return;
+        }
+        File tmp = new File(file.getParentFile(), file.getName() + ".crop.mp4");
+        File backup = new File(file.getParentFile(), file.getName() + ".bak.mp4");
+        try {
+            if( VideoCropper.cropToAspectRatio(file, tmp, aspect_ratio) && tmp.exists() && tmp.length() > 100 ) {
+                if( file.renameTo(backup) ) {
+                    if( tmp.renameTo(file) ) {
+                        //noinspection ResultOfMethodCallIgnored
+                        backup.delete();
+                        if( MyDebug.LOG )
+                            Log.d(TAG, "cropped video to aspect ratio " + aspect_ratio);
+                    }
+                    else {
+                        //noinspection ResultOfMethodCallIgnored
+                        backup.renameTo(file);
+                        Log.e(TAG, "failed to move cropped video into place");
+                    }
+                }
+                else {
+                    Log.e(TAG, "failed to back up video before cropping");
+                }
+            }
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to crop video", e);
+        }
+        finally {
+            if( tmp.exists() ) {
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
+            // only remove the backup once the real file is safely back in place
+            if( backup.exists() && file.exists() ) {
+                //noinspection ResultOfMethodCallIgnored
+                backup.delete();
+            }
+        }
     }
 
     private Context getContext() {

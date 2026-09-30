@@ -235,6 +235,17 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         return getPhotoAspectRatio(sharedPreferences);
     }
 
+    /** RenCam: the user's chosen output aspect ratio for video, or 0 for "default" (native). */
+    public static double getVideoAspectRatio(SharedPreferences sharedPreferences) {
+        String value = sharedPreferences.getString(PreferenceKeys.VideoAspectRatioPreferenceKey, "default");
+        return parseAspectRatio(value);
+    }
+
+    /** Instance wrapper for {@link #getVideoAspectRatio(SharedPreferences)}. */
+    public double getVideoAspectRatio() {
+        return getVideoAspectRatio(sharedPreferences);
+    }
+
     /** Parses an aspect ratio preference value such as "16:9" or "9:16" into width/height, or 0. */
     public static double parseAspectRatio(String value) {
         if( value == null || value.equals("default") ) {

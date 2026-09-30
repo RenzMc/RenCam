@@ -844,6 +844,22 @@
         <item>16:9</item>
         <item>9:16</item>
     </string-array>
+    <string-array name="preference_video_aspect_ratio_entries">
+        <item>@string/preference_video_aspect_ratio_default</item>
+        <item>@string/preference_video_aspect_ratio_1_1</item>
+        <item>@string/preference_video_aspect_ratio_4_3</item>
+        <item>@string/preference_video_aspect_ratio_3_4</item>
+        <item>@string/preference_video_aspect_ratio_16_9</item>
+        <item>@string/preference_video_aspect_ratio_9_16</item>
+    </string-array>
+    <string-array name="preference_video_aspect_ratio_values">
+        <item>default</item>
+        <item>1:1</item>
+        <item>4:3</item>
+        <item>3:4</item>
+        <item>16:9</item>
+        <item>9:16</item>
+    </string-array>
     <string-array name="preference_audio_noise_control_sensitivity_entries">
         <item>@string/preference_audio_noise_control_sensitivity_m3</item>
         <item>@string/preference_audio_noise_control_sensitivity_m2</item>

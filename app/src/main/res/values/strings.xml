@@ -181,6 +181,14 @@
     <string name="preference_photo_aspect_ratio_3_4">3:4 (portrait)</string>
     <string name="preference_photo_aspect_ratio_16_9">16:9 (landscape)</string>
     <string name="preference_photo_aspect_ratio_9_16">9:16 (portrait)</string>
+    <string name="preference_video_aspect_ratio">Video aspect ratio</string>
+    <string name="preference_video_aspect_ratio_summary">Crop recorded video to a fixed aspect ratio (also applies to the video inside a Live Photo). Choose 9:16 for portrait video. \"Default\" keeps the camera\'s native aspect ratio (uncropped).</string>
+    <string name="preference_video_aspect_ratio_default">Default (camera native)</string>
+    <string name="preference_video_aspect_ratio_1_1">1:1 (square)</string>
+    <string name="preference_video_aspect_ratio_4_3">4:3 (landscape)</string>
+    <string name="preference_video_aspect_ratio_3_4">3:4 (portrait)</string>
+    <string name="preference_video_aspect_ratio_16_9">16:9 (landscape)</string>
+    <string name="preference_video_aspect_ratio_9_16">9:16 (portrait)</string>
     <string name="preference_quality">Image quality</string>
     <string name="preference_quality_summary">Set the image quality of saved JPEG or WebP photo images (default value is 90%%). Has no effect for PNG image format.\n%s</string> <!-- '%' is encoded as '%%' - a single % can crash devices, and this isn't picked up by Android Lint! -->
     <string name="preference_raw">RAW</string>

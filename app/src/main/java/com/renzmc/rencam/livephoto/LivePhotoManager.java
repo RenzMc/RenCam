@@ -867,6 +867,19 @@ public class LivePhotoManager {
     }
 
     /**
+     * The aspect ratio the embedded video should be cropped to. The cover image is cropped to the
+     * photo aspect ratio, so the video is made to match it; if no photo ratio is set we fall back to
+     * the dedicated video aspect ratio. Returns 0 when neither is set (no crop).
+     */
+    private double getTargetVideoAspectRatio() {
+        double photo_ratio = com.renzmc.rencam.MyApplicationInterface.getPhotoAspectRatio(sharedPreferences);
+        if( photo_ratio > 0.0 ) {
+            return photo_ratio;
+        }
+        return com.renzmc.rencam.MyApplicationInterface.getVideoAspectRatio(sharedPreferences);
+    }
+
+    /**
      * Called once the cover still has been saved to disk, so we know which file to package the video
      * into (turning the plain JPEG into a Motion Photo).
      */
@@ -954,12 +967,29 @@ public class LivePhotoManager {
         finalize_executor.execute(new Runnable() {
             @Override
             public void run() {
+                File video_to_package = video_file;
+                File cropped_file = null;
                 try {
+                    // Crop the embedded video to the chosen aspect ratio (e.g. 9:16) so it matches the
+                    // cover image. This runs on the background executor and is best-effort: if it
+                    // fails we simply embed the original video.
+                    double target_ratio = getTargetVideoAspectRatio();
+                    if( target_ratio > 0.0 && video_file != null && video_file.exists() ) {
+                        cropped_file = new File(context.getCacheDir(),
+                                "rencam_live_crop_" + System.currentTimeMillis() + ".mp4");
+                        if( VideoCropper.cropToAspectRatio(video_file, cropped_file, target_ratio) ) {
+                            video_to_package = cropped_file;
+                        }
+                        else {
+                            deleteQuietly(cropped_file);
+                            cropped_file = null;
+                        }
+                    }
                     if( still_file != null ) {
-                        packageIntoFile(still_file, video_file, presentation_us);
+                        packageIntoFile(still_file, video_to_package, presentation_us);
                     }
                     else if( still_uri != null ) {
-                        packageIntoUri(still_uri, video_file, presentation_us);
+                        packageIntoUri(still_uri, video_to_package, presentation_us);
                     }
                 }
                 catch(Exception e) {
@@ -967,6 +997,9 @@ public class LivePhotoManager {
                 }
                 finally {
                     deleteQuietly(video_file);
+                    if( cropped_file != null ) {
+                        deleteQuietly(cropped_file);
+                    }
                 }
             }
         });

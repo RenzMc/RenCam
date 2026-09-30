@@ -137,6 +137,7 @@ public interface ApplicationInterface {
     boolean getGeotaggingPref(); // whether to geotag photos
     boolean getRequireLocationPref(); // if getGeotaggingPref() returns true, and this method returns true, then phot/video will only be taken if location data is available
     boolean getRecordAudioPref(); // whether to record audio when recording video
+    double getVideoAspectRatio(); // RenCam: output aspect ratio for video (0 = default/native); used to centre-crop recorded video (including the video inside a Live Photo)
     String getRecordAudioChannelsPref(); // either "audio_default", "audio_mono" or "audio_stereo"
     String getRecordAudioSourcePref(); // "audio_src_camcorder" is recommended, but other options are: "audio_src_mic", "audio_src_default", "audio_src_voice_communication", "audio_src_unprocessed" (unprocessed required Android 7+); see corresponding values in android.media.MediaRecorder.AudioSource
     int getZoomPref(); // index into Preview.getSupportedZoomRatios() array (each entry is the zoom factor, scaled by 100; array is sorted from min to max zoom); return -1 for default 1x zoom
