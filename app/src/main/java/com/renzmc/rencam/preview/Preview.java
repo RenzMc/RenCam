@@ -3932,12 +3932,30 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 targetRatio = ((double)profile.videoFrameWidth) / (double)profile.videoFrameHeight;
             }
             else {
-                if( MyDebug.LOG )
-                    Log.d(TAG, "set preview aspect ratio from photo size (wysiwyg)");
-                CameraController.Size picture_size = camera_controller.getPictureSize();
-                if( MyDebug.LOG )
-                    Log.d(TAG, "picture_size: " + picture_size.width + " x " + picture_size.height);
-                targetRatio = ((double)picture_size.width) / (double)picture_size.height;
+                // RenCam: the photo output is cropped to the user's chosen aspect ratio (e.g. 9:16
+                // portrait), so the preview must use that output ratio - not the raw picture size -
+                // to be a true "what you see is what you get" view. Without this the preview came out
+                // 4:3 while the saved photo was 9:16 (the "GUI-nya 4:3 padahal hasilnya 9:16" bug).
+                double photo_aspect_ratio = applicationInterface.getPhotoAspectRatio();
+                if( photo_aspect_ratio > 0.0 ) {
+                    // A portrait output (< 1, e.g. 9:16) is expressed in the natural (landscape)
+                    // camera orientation for choosing the preview size; getMeasureSpec() rotates it
+                    // back for display, so the on-screen preview ends up portrait 9:16.
+                    if( photo_aspect_ratio < 1.0 ) {
+                        photo_aspect_ratio = 1.0 / photo_aspect_ratio;
+                    }
+                    if( MyDebug.LOG )
+                        Log.d(TAG, "set preview aspect ratio from photo output ratio (wysiwyg): " + photo_aspect_ratio);
+                    targetRatio = photo_aspect_ratio;
+                }
+                else {
+                    if( MyDebug.LOG )
+                        Log.d(TAG, "set preview aspect ratio from photo size (wysiwyg)");
+                    CameraController.Size picture_size = camera_controller.getPictureSize();
+                    if( MyDebug.LOG )
+                        Log.d(TAG, "picture_size: " + picture_size.width + " x " + picture_size.height);
+                    targetRatio = ((double)picture_size.width) / (double)picture_size.height;
+                }
             }
         }
         else {
@@ -4267,6 +4285,38 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
         if( MyDebug.LOG )
             Log.d(TAG, "getImageVideoRotation() returns current_rotation " + current_rotation);
         return this.current_rotation;
+    }
+
+    /** RenCam: the orientation hint to use for the continuously-running Live Photo buffer.
+     *
+     *  <p>The photo output is fixed to a portrait 9:16 crop (see
+     *  {@code MyApplicationInterface.getPhotoAspectRatio()}), so the buffer must always be recorded
+     *  with a <b>portrait</b> orientation hint. Using the live sensor rotation ({@code
+     *  current_rotation}) here was unreliable: if the phone was momentarily tilted when the buffer
+     *  (re)started, the hint could come out 0/180 (landscape). The finaliser then believed the clip
+     *  needed cropping to 9:16, and cropping a 16:9 frame to 9:16 throws away most of the resolution
+     *  (2560x1440 -&gt; 810x1440) and left the clip rotated 180 (upside-down) - the "foto live ga
+     *  waras / jadi 2MB / kena mirror" bug. Pinning it to the portrait rotation keeps the clip at
+     *  full resolution and always upright.</p>
+     *
+     *  <p>This is exactly the rotation RenCam uses when the user locks the orientation to portrait,
+     *  so it is a well-tested code path.</p>
+     */
+    private int getLivePhotoOrientationHint() {
+        if( camera_controller == null ) {
+            return getImageVideoRotation();
+        }
+        int camera_orientation = camera_controller.getCameraOrientation();
+        int device_orientation = getDeviceDefaultOrientation();
+        if( device_orientation == Configuration.ORIENTATION_PORTRAIT ) {
+            // equivalent to onOrientationChanged(0) for a portrait-natural device
+            return camera_orientation;
+        }
+        // landscape-natural device (e.g. tablet): equivalent to onOrientationChanged(90)
+        if( camera_controller.getFacing() == CameraController.Facing.FACING_FRONT ) {
+            return (camera_orientation + 270) % 360;
+        }
+        return (camera_orientation + 90) % 360;
     }
 
     public void draw(Canvas canvas) {
@@ -5994,7 +6044,10 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
                 Log.e(TAG, "failed to set max duration for live photo buffer", e);
             }
             cameraSurface.setVideoRecorder(local_recorder);
-            local_recorder.setOrientationHint(getImageVideoRotation());
+            // RenCam: pin the buffer to the portrait rotation (see getLivePhotoOrientationHint())
+            // instead of the volatile live sensor rotation, so the clip is always recorded portrait
+            // at full resolution and never needs a destructive 16:9 -> 9:16 crop.
+            local_recorder.setOrientationHint(getLivePhotoOrientationHint());
             if( MyDebug.LOG )
                 Log.d(TAG, "about to prepare live photo buffer recorder");
             local_recorder.prepare();
