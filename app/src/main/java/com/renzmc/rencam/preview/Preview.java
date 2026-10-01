@@ -5456,7 +5456,9 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             // during that window must NOT be swallowed - instead it is queued so the user can shoot
             // many Live Photos in a row without waiting for the previous one to finish. The queued
             // presses are recorded one-by-one in the background (see LivePhotoManager.queuePress()).
-            if( !is_video && applicationInterface.isLivePhotoActive() && applicationInterface.startLivePhotoCapture() ) {
+            // startLivePhotoCapture() returns false (with no side effect) when Live Photo is not
+            // active, so a normal still that is already being taken still falls through below.
+            if( !is_video && applicationInterface.startLivePhotoCapture() ) {
                 if( MyDebug.LOG )
                     Log.d(TAG, "live photo active - queued another live photo capture");
                 return;
