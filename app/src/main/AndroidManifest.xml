@@ -174,11 +174,15 @@
             />
 
         <!-- RenCam Live Photo: foreground service that keeps the process alive while a Live Photo is
-             finalised in the background. foregroundServiceType is only meaningful on API 29+. -->
+             finalised in the background. foregroundServiceType is only meaningful on API 29+.
+             stopWithTask="false" makes the service (and therefore the background finalisation) keep
+             running even when the user swipes RenCam out of the recent-tasks list, so a Live Photo is
+             still saved correctly after the app is closed. -->
         <service
             android:name="com.renzmc.rencam.livephoto.LivePhotoService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
+            android:stopWithTask="false"
             tools:targetApi="q" />
 
         <!-- RenCam in-app gallery (shows Live Photo thumbnails and previews) -->

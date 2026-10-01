@@ -83,24 +83,27 @@ public class LivePhotoManager {
      *
      * <p>Each pulse must be long enough to be captured by the 30fps video buffer: one frame is
      * ~33ms, so a pulse shorter than ~66ms can fall almost entirely between two frames and barely
-     * show up in the clip. The main flash and the capture flash are both comfortably long; the
-     * flicker is intentionally short (a blink) but still spans ~1-2 frames.</p>
+     * show up in the clip. That is why the phases are deliberately <b>spaced out</b> here: the dark
+     * gaps and the flicker are all at least ~2-3 frames long, so the buffer records the main flash,
+     * the dark gap, the flicker and the capture flash as <b>four distinct</b> beats instead of one
+     * blurred flash. (An earlier version crammed the flicker and capture flash together in &lt;50ms,
+     * which made them - and therefore the main flash - invisible.)</p>
      *
      * <p>The still is sampled during the <b>capture flash</b> (see {@link #COVER_DELAY_MS}), not the
      * main flash as in earlier versions - exactly as the user requested.</p>
      */
-    private static final int FLASH_MAIN_START_MS = 120;    // main flash starts (after the "wait")
-    private static final int FLASH_MAIN_END_MS = 360;      // main flash ends (~240ms - longer than the others)
-    private static final int FLASH_FLICKER_START_MS = 400; // quick flicker starts (after a short dark gap)
-    private static final int FLASH_FLICKER_END_MS = 445;   // flicker ends (~45ms - a startling blink)
-    private static final int FLASH_CAPTURE_START_MS = 470; // capture flash starts (just after the flicker)
-    private static final int FLASH_CAPTURE_END_MS = 740;   // capture flash ends (~270ms - the bright "cekrek")
+    private static final int FLASH_MAIN_START_MS = 150;    // main flash starts (after the "wait")
+    private static final int FLASH_MAIN_END_MS = 430;      // main flash ends (~280ms - dimmer but longer)
+    private static final int FLASH_FLICKER_START_MS = 560; // flicker starts (after a clear ~130ms dark gap)
+    private static final int FLASH_FLICKER_END_MS = 660;   // flicker ends (~100ms - a distinct "kedip")
+    private static final int FLASH_CAPTURE_START_MS = 720; // capture flash starts (a short gap after the flicker)
+    private static final int FLASH_CAPTURE_END_MS = 1060;  // capture flash ends (~340ms - the bright "cekrek")
     /**
      * How long after the shutter the cover frame is taken. This is inside the <b>capture flash</b>
      * window (FLASH_CAPTURE_START_MS .. FLASH_CAPTURE_END_MS), so the still is always lit by the
      * brightest flash - the "cekrek" moment.
      */
-    private static final int COVER_DELAY_MS = 580;
+    private static final int COVER_DELAY_MS = 860;
     /**
      * Screen-flash brightness (alpha 0..255) for the front camera, which has no LED: the main flash
      * is deliberately dimmer, the flicker is medium, and the capture flash is maxed out. (An LED
@@ -632,8 +635,21 @@ public class LivePhotoManager {
 
     /** Called once the post-roll has elapsed: stop the buffer, trim it and extract the cover frame. */
     private synchronized void onPostRollElapsed() {
+        onPostRollElapsed(true);
+    }
+
+    /**
+     * Called once the post-roll has elapsed (or when the camera is closing mid-capture): stop the
+     * buffer, trim it and extract the cover frame.
+     *
+     * @param reconnect if true the camera is reconnected and the buffer restarted for the next shot
+     *                  (the normal end-of-capture path); if false the buffer is stopped without
+     *                  reconnecting, because the camera is being released anyway (the camera-closing
+     *                  path - see {@link #onCameraClosing()}).
+     */
+    private synchronized void onPostRollElapsed(boolean reconnect) {
         if( MyDebug.LOG )
-            Log.d(TAG, "onPostRollElapsed");
+            Log.d(TAG, "onPostRollElapsed: reconnect=" + reconnect);
         post_roll_runnable = null;
         if( !capturing ) {
             return;
@@ -647,8 +663,10 @@ public class LivePhotoManager {
         final long offset_ms = shutter_offset_ms;
         final long post_roll = post_roll_ms;
         final boolean flash_used = flash_fired;
-        // Stop the buffer (this reconnects the camera and restarts the normal preview).
-        final File video_file = preview != null ? preview.stopLivePhotoBuffer(true) : null;
+        // Stop the buffer. On the normal path this reconnects the camera and restarts the preview; on
+        // the camera-closing path it does not (the camera is going away), but the recorded file is
+        // still complete on disk and can be finalised in the background.
+        final File video_file = preview != null ? preview.stopLivePhotoBuffer(reconnect) : null;
         buffer_running = false;
         buffer_file = null;
 
@@ -656,8 +674,11 @@ public class LivePhotoManager {
             preview.onLivePhotoCaptureFinished();
         }
 
-        // Restart the buffer for the next shot (once the camera has settled).
-        scheduleBufferRestart(5);
+        // Restart the buffer for the next shot (once the camera has settled) - but only on the normal
+        // path; while the camera is closing there is nothing to restart.
+        if( reconnect ) {
+            scheduleBufferRestart(5);
+        }
 
         if( video_file == null || !video_file.exists() || video_file.length() < 100 ) {
             Log.e(TAG, "live photo recording produced no usable video");
@@ -893,11 +914,12 @@ public class LivePhotoManager {
      * capture flash - the "cekrek" - and never on the earlier main flash or the flicker.</p>
      */
     private long findFlashFrameMs(File video_file, long expected_ms) {
-        // The capture flash lights the scene from about 470ms to 740ms after the shutter, and the
+        // The capture flash lights the scene from about 720ms to 1060ms after the shutter, and the
         // still is expected inside that window; search a window that comfortably covers it (plus a
-        // little slack for timeline drift).
-        final long window_before = 250L;
-        final long window_after = 300L;
+        // little slack for timeline drift). The window starts after the main flash has ended, so it
+        // can never accidentally pick the dimmer main flash or the flicker.
+        final long window_before = 220L;
+        final long window_after = 280L;
         final long step = 60L;
         Uri uri = Uri.fromFile(video_file);
         long duration = LivePhotoHelper.getVideoDuration(context, uri);
@@ -1098,6 +1120,48 @@ public class LivePhotoManager {
         result.uri = stillUri;
         result.file = null;
         result.done = true;
+    }
+
+    /**
+     * Called when the camera is being closed (the user left the app, the preview is being released,
+     * the camera is being switched, etc.).
+     *
+     * <p>Unlike {@link #abort()}, this does <b>not</b> throw away an in-flight capture. This is what
+     * makes Live Photo processing genuinely run in the background: if a Live Photo is still being
+     * recorded its buffer is stopped and the capture is finalised on the background executor, and if
+     * one is already being finalised it is simply left to finish. The foreground service is kept
+     * alive until every capture has been packaged, so closing RenCam never loses a Live Photo - the
+     * trimming, cover extraction and Motion Photo packaging all continue after the app is gone.</p>
+     */
+    public synchronized void onCameraClosing() {
+        if( MyDebug.LOG )
+            Log.d(TAG, "onCameraClosing");
+        // No more captures can be started once the camera is closing, so drop any queued presses.
+        pending_captures = 0;
+        cancelBufferCap();
+
+        if( capturing ) {
+            // A capture is still being recorded: stop the buffer (without reconnecting - the camera is
+            // going away) and finalise it. onPostRollElapsed(false) keeps captures_in_flight > 0, so
+            // the foreground service stays alive until the photo has been packaged.
+            if( post_roll_runnable != null ) {
+                handler.removeCallbacks(post_roll_runnable);
+                post_roll_runnable = null;
+            }
+            onPostRollElapsed(false);
+        }
+        else {
+            // No capture is being recorded: stop the idle buffer (if any) and delete it.
+            if( preview != null && preview.isLivePhotoBuffering() ) {
+                File file = preview.stopLivePhotoBuffer(false);
+                deleteQuietly(file);
+            }
+            buffer_running = false;
+            buffer_file = null;
+            // If a capture is still being finalised in the background, keep the foreground service
+            // alive so the process (and the finalisation thread) survives; otherwise stop it.
+            updateForegroundService();
+        }
     }
 
     /** Aborts any in-flight capture and discards the recorded video. */

@@ -3084,7 +3084,11 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
     public void cameraClosed() {
         if( MyDebug.LOG )
             Log.d(TAG, "cameraClosed");
-        getLivePhotoManager().abort();
+        // RenCam Live Photo: the camera is being released (e.g. the user left the app). Do NOT throw
+        // away an in-flight capture - finalise it in the background instead, so the Live Photo is
+        // still saved correctly even after RenCam is closed (onCameraClosing() keeps the foreground
+        // service alive until the photo has been packaged).
+        getLivePhotoManager().onCameraClosing();
         this.stopPanorama(true);
         main_activity.getMainUI().closeExposureUI();
         main_activity.getMainUI().destroyPopup(); // need to close popup - and when camera reopened, it may have different settings
