@@ -94,16 +94,16 @@ public class LivePhotoManager {
      */
     private static final int FLASH_MAIN_START_MS = 150;    // main flash starts (after the "wait")
     private static final int FLASH_MAIN_END_MS = 430;      // main flash ends (~280ms - dimmer but longer)
-    private static final int FLASH_FLICKER_START_MS = 560; // flicker starts (after a clear ~130ms dark gap)
-    private static final int FLASH_FLICKER_END_MS = 660;   // flicker ends (~100ms - a distinct "kedip")
-    private static final int FLASH_CAPTURE_START_MS = 720; // capture flash starts (a short gap after the flicker)
-    private static final int FLASH_CAPTURE_END_MS = 1060;  // capture flash ends (~340ms - the bright "cekrek")
+    private static final int FLASH_FLICKER_START_MS = 680; // flicker starts (after a longer ~250ms dark gap, so the main flash clearly goes off and the burst no longer looks "numpuk"/stacked)
+    private static final int FLASH_FLICKER_END_MS = 780;   // flicker ends (~100ms - a distinct "kedip")
+    private static final int FLASH_CAPTURE_START_MS = 880; // capture flash starts (a clear 100ms gap after the flicker)
+    private static final int FLASH_CAPTURE_END_MS = 1220;  // capture flash ends (~340ms - the bright "cekrek")
     /**
      * How long after the shutter the cover frame is taken. This is inside the <b>capture flash</b>
      * window (FLASH_CAPTURE_START_MS .. FLASH_CAPTURE_END_MS), so the still is always lit by the
      * brightest flash - the "cekrek" moment.
      */
-    private static final int COVER_DELAY_MS = 860;
+    private static final int COVER_DELAY_MS = 1020;
     /**
      * Screen-flash brightness (alpha 0..255) for the front camera, which has no LED: the main flash
      * is deliberately dimmer, the flicker is medium, and the capture flash is maxed out. (An LED
@@ -914,7 +914,7 @@ public class LivePhotoManager {
      * capture flash - the "cekrek" - and never on the earlier main flash or the flicker.</p>
      */
     private long findFlashFrameMs(File video_file, long expected_ms) {
-        // The capture flash lights the scene from about 720ms to 1060ms after the shutter, and the
+        // The capture flash lights the scene from about 880ms to 1220ms after the shutter, and the
         // still is expected inside that window; search a window that comfortably covers it (plus a
         // little slack for timeline drift). The window starts after the main flash has ended, so it
         // can never accidentally pick the dimmer main flash or the flicker.

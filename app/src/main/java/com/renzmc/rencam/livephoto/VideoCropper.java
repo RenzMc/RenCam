@@ -88,6 +88,16 @@ public class VideoCropper {
                 Log.d(TAG, "video already matches target ratio " + target_ratio);
                 return false;
             }
+            // RenCam safety: if the clip currently displays LANDSCAPE but the target is PORTRAIT (or
+            // vice-versa), a centre-crop in the encoded frame would produce a sideways / garbage clip
+            // (this is exactly what made a mis-rotated Live Photo come out "ga waras" and mirrored).
+            // The real fix is to record the buffer with the correct portrait hint (see
+            // Preview.getLivePhotoOrientationHint()); if we still end up here, bail out so the caller
+            // keeps the original, valid clip instead of replacing it with a broken one.
+            if( (current_ratio > 1.0) != (target_ratio > 1.0) ) {
+                Log.d(TAG, "skipping crop: clip ratio " + current_ratio + " and target " + target_ratio + " have opposite orientations");
+                return false;
+            }
 
             // Work out the visible crop rectangle (in display terms) that produces target_ratio.
             int crop_disp_w, crop_disp_h;
