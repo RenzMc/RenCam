@@ -40,9 +40,9 @@ Photos, and can be shared like any normal photo.
 
 ## Install
 
-1. Go to the **Actions** tab of this repository and open the latest **Build RenCam APK** run.
-2. Download the **RenCam-APK** artifact (a `.zip` containing the APK).
-3. Unzip, copy the `.apk` to your phone, and install it (allow "install from unknown sources").
+1. Go to the https://github.com/RenzMc/RenCam/releases
+2. Download the **RenCam.apk**
+3. copy the `.apk` to your phone, and install it (allow "install from unknown sources").
 4. Requires **Android 4.3 (Jelly Bean MR2)** or newer.
 
 ---
