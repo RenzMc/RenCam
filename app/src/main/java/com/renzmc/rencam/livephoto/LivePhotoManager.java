@@ -92,12 +92,12 @@ public class LivePhotoManager {
      * <p>The still is sampled during the <b>capture flash</b> (see {@link #COVER_DELAY_MS}), not the
      * main flash as in earlier versions - exactly as the user requested.</p>
      */
-    private static final int FLASH_MAIN_START_MS = 150;    // main flash starts (after the "wait")
-    private static final int FLASH_MAIN_END_MS = 430;      // main flash ends (~280ms - dimmer but longer)
+    private static final int FLASH_MAIN_START_MS = 130;    // main flash starts (after the "wait")
+    private static final int FLASH_MAIN_END_MS = 330;      // main flash ends (~280ms - dimmer but longer)
     private static final int FLASH_FLICKER_START_MS = 680; // flicker starts (after a longer ~250ms dark gap, so the main flash clearly goes off and the burst no longer looks "numpuk"/stacked)
-    private static final int FLASH_FLICKER_END_MS = 780;   // flicker ends (~100ms - a distinct "kedip")
+    private static final int FLASH_FLICKER_END_MS = 760;   // flicker ends (~100ms - a distinct "kedip")
     private static final int FLASH_CAPTURE_START_MS = 880; // capture flash starts (a clear 100ms gap after the flicker)
-    private static final int FLASH_CAPTURE_END_MS = 1220;  // capture flash ends (~340ms - the bright "cekrek")
+    private static final int FLASH_CAPTURE_END_MS = 1230;  // capture flash ends (~340ms - the bright "cekrek")
     /**
      * How long after the shutter the cover frame is taken. This is inside the <b>capture flash</b>
      * window (FLASH_CAPTURE_START_MS .. FLASH_CAPTURE_END_MS), so the still is always lit by the
@@ -110,7 +110,7 @@ public class LivePhotoManager {
      * can't be dimmed, so on the back camera every pulse is a full torch.)
      */
     private static final int FLASH_MAIN_ALPHA = 110;
-    private static final int FLASH_FLICKER_ALPHA = 190;
+    private static final int FLASH_FLICKER_ALPHA = 200;
     private static final int FLASH_CAPTURE_ALPHA = 255;
     /**
      * Extra recording time kept after the post-roll before the buffer is stopped. MediaRecorder can
