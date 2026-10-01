@@ -275,6 +275,21 @@ public class MyPreferenceFragment extends PreferenceFragment implements OnShared
             lp.setEntryValues(values);
             String resolution_preference_key = PreferenceKeys.getResolutionPreferenceKey(cameraId);
             String resolution_value = sharedPreferences.getString(resolution_preference_key, "");
+            if( resolution_value.length() == 0 ) {
+                // RenCam: default to the first 9:16 entry (which corresponds to the largest supported
+                // size), so photos default to 9:16 in the settings - matching the video.
+                for( CharSequence value : values ) {
+                    if( value.toString().endsWith(" 916") ) {
+                        resolution_value = value.toString();
+                        break;
+                    }
+                }
+                if( resolution_value.length() > 0 ) {
+                    SharedPreferences.Editor editor = sharedPreferences.edit();
+                    editor.putString(resolution_preference_key, resolution_value);
+                    editor.apply();
+                }
+            }
             if( MyDebug.LOG )
                 Log.d(TAG, "resolution_value: " + resolution_value);
             lp.setValue(resolution_value);

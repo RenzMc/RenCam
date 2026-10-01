@@ -30,6 +30,14 @@ public interface LivePhotoHost {
     /** Turns on the front-screen "flash" (a bright white screen used to light the subject). */
     void turnFrontScreenFlashOn();
 
+    /**
+     * Turns on the front-screen "flash" at a given brightness, used by the Live Photo flash burst
+     * so the main flash can be dimmer and the capture flash can be maxed out.
+     *
+     * @param alpha brightness of the white overlay, 0 (off) .. 255 (full white)
+     */
+    void turnFrontScreenFlashOn(int alpha);
+
     /** Turns off the front-screen flash. */
     void turnFrontScreenFlashOff();
 

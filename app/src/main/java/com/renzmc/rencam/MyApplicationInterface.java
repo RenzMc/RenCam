@@ -93,6 +93,16 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
      *  Photos must be JPEG, regardless of the user's chosen still image format). */
     private boolean force_jpeg_for_live_photo = false;
 
+    /**
+     * RenCam Live Photo: when true, the cover still is saved <b>synchronously</b> (on the caller's
+     * thread) instead of being queued to the background image-saver. The Live Photo finalisation runs
+     * on its own background thread and needs the saved file/uri immediately afterwards so it can
+     * package the video into it as one self-contained step - which is what lets the user shoot many
+     * Live Photos in a row while they are processed one-by-one. The save still happens off the UI
+     * thread, so this never blocks the interface.
+     */
+    private boolean save_live_photo_cover_foreground = false;
+
     private final static float panorama_pics_per_screen = 3.33333f;
     private int n_capture_images = 0; // how many calls to onPictureTaken() since the last call to onCaptureStarted()
     private int n_capture_images_raw = 0; // how many calls to onRawPictureTaken() since the last call to onCaptureStarted()
@@ -366,6 +376,10 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         // synchronously (before dispatching to the background saver), so toggling the flag around
         // the call is safe.
         force_jpeg_for_live_photo = true;
+        // RenCam Live Photo: save the cover synchronously (still on the background finalisation
+        // thread) so the LivePhotoManager gets the saved file/uri back immediately and can package
+        // the video into it as one self-contained step.
+        save_live_photo_cover_foreground = true;
         // RenCam Live Photo: give the saved still the "MP" filename suffix required by the Motion
         // Photo spec (so WhatsApp and other readers recognise the embedded video).
         imageSaver.setLivePhotoCover(true);
@@ -375,6 +389,7 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         finally {
             imageSaver.setLivePhotoCover(false);
             force_jpeg_for_live_photo = false;
+            save_live_photo_cover_foreground = false;
         }
     }
 
@@ -753,6 +768,31 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         String resolution_value = sharedPreferences.getString(PreferenceKeys.getResolutionPreferenceKey(cameraId), "");
         if( MyDebug.LOG )
             Log.d(TAG, "resolution_value: " + resolution_value);
+        // RenCam: if the user has never chosen a resolution, default to the largest supported size
+        // tagged as a 9:16 entry ("<width> <height> 916"), so photos default to 9:16 in the settings
+        // (matching the video) and the capture uses the highest-resolution 9:16 the device supports.
+        // The value is persisted so the resolution list shows the 9:16 entry as selected.
+        if( resolution_value.length() == 0 ) {
+            CameraController.Size largest = null;
+            List<CameraController.Size> sizes = main_activity.getPreview().getSupportedPictureSizes(false);
+            if( sizes != null ) {
+                for( CameraController.Size size : sizes ) {
+                    if( largest == null || (long)size.width*size.height > (long)largest.width*largest.height ) {
+                        largest = size;
+                    }
+                }
+            }
+            if( largest != null && largest.width > 0 && largest.height > 0 ) {
+                int w = Math.max(largest.width, largest.height);
+                int h = Math.min(largest.width, largest.height);
+                resolution_value = w + " " + h + " 916";
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putString(PreferenceKeys.getResolutionPreferenceKey(cameraId), resolution_value);
+                editor.apply();
+                if( MyDebug.LOG )
+                    Log.d(TAG, "defaulted resolution to 9:16: " + resolution_value);
+            }
+        }
         Pair<Integer, Integer> result = null;
         // RenCam: parseResolutionString() tolerates the optional trailing "916" marker used by the
         // 9:16 resolution entries, and returns the underlying (landscape) capture size.
@@ -2931,6 +2971,21 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
         drawPreview.turnFrontScreenFlashOn();
     }
 
+    /**
+     * RenCam Live Photo: turns on the front-screen flash at a given brightness. Used by the Live
+     * Photo flash burst so the "main flash" can be dimmer and the "capture flash" can be maxed out.
+     * The screen itself is still driven to max brightness (so the flash is as strong as possible),
+     * while the white overlay alpha controls how bright the flash reads.
+     */
+    @Override
+    public void turnFrontScreenFlashOn(int alpha) {
+        if( MyDebug.LOG )
+            Log.d(TAG, "turnFrontScreenFlashOn: alpha=" + alpha);
+        used_front_screen_flash = true;
+        main_activity.setBrightnessForCamera(true); // ensure we have max screen brightness, even if user preference not set for max brightness
+        drawPreview.turnFrontScreenFlashOn(alpha);
+    }
+
     @Override
     public void onCaptureStarted() {
         if( MyDebug.LOG )
@@ -3433,6 +3488,11 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
 
     private boolean saveInBackground(boolean image_capture_intent) {
         boolean do_in_background = true;
+        // RenCam Live Photo: the cover still is always saved synchronously (on the caller's thread,
+        // which is the background finalisation thread) so the LivePhotoManager can package the video
+        // into it immediately - see save_live_photo_cover_foreground.
+        if( save_live_photo_cover_foreground )
+            do_in_background = false;
 		/*if( !sharedPreferences.getBoolean(PreferenceKeys.BackgroundPhotoSavingPreferenceKey, true) )
 			do_in_background = false;
 		else*/ if( image_capture_intent )
@@ -3516,6 +3576,12 @@ public class MyApplicationInterface extends BasicApplicationInterface implements
             Log.d(TAG, "has geo direction: " + main_activity.getPreview().hasGeoDirection());
         }
         int image_quality = getSaveImageQualityPref();
+        // RenCam Live Photo "super HD": the cover still is re-encoded when it is cropped to 9:16, so
+        // save it at the maximum JPEG quality (regardless of the user's quality preference) to keep
+        // the Live Photo cover as sharp as possible.
+        if( force_jpeg_for_live_photo ) {
+            image_quality = 100;
+        }
         if( MyDebug.LOG )
             Log.d(TAG, "image_quality: " + image_quality);
         boolean do_auto_stabilise = getAutoStabilisePref() && main_activity.getPreview().hasLevelAngleStable();

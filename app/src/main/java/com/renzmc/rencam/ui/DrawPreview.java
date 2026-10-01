@@ -227,6 +227,7 @@ public class DrawPreview {
     private boolean taking_picture; // true iff camera is in process of capturing a picture (including any necessary prior steps such as autofocus, flash/precapture)
     private boolean capture_started; // true iff the camera is capturing
     private boolean front_screen_flash; // true iff the front screen display should maximise to simulate flash
+    private int front_screen_flash_alpha = 232; // brightness (0..255) of the front-screen flash white overlay
     private boolean image_queue_full; // whether we can no longer take new photos due to image queue being full (or rather, would become full if a new photo taken)
 
     private boolean continuous_focus_moving;
@@ -530,6 +531,20 @@ public class DrawPreview {
         if( MyDebug.LOG )
             Log.d(TAG, "turnFrontScreenFlashOn");
         front_screen_flash = true;
+        front_screen_flash_alpha = 232;
+    }
+
+    /**
+     * RenCam Live Photo: turns on the front-screen flash at a given brightness, so the Live Photo
+     * flash burst can use a dimmer main flash and a maxed-out capture flash.
+     *
+     * @param alpha brightness of the white overlay, 0 (off) .. 255 (full white)
+     */
+    public void turnFrontScreenFlashOn(int alpha) {
+        if( MyDebug.LOG )
+            Log.d(TAG, "turnFrontScreenFlashOn: alpha=" + alpha);
+        front_screen_flash = true;
+        front_screen_flash_alpha = Math.max(0, Math.min(255, alpha));
     }
 
     public void turnFrontScreenFlashOff() {
@@ -2820,22 +2835,27 @@ public class DrawPreview {
             // Front screen "flash": there is no LED on the front camera, so we brighten the screen
             // to (near) maximum and add a soft white glow around the edges so it looks like a real
             // flash / ring light - and so light is thrown onto the subject from the sides too.
+            // The overall brightness is controlled by front_screen_flash_alpha, so the Live Photo
+            // flash burst can use a dimmer main flash and a maxed-out capture flash.
             final int width = canvas.getWidth();
             final int height = canvas.getHeight();
+            final float flash_scale = front_screen_flash_alpha / 255.0f;
 
-            // 1) Base: brighten the whole screen to (near) full white.
+            // 1) Base: brighten the whole screen to the requested white level.
             p.setColor(Color.WHITE);
-            p.setAlpha(232); // very bright, but leave a tiny bit so the user can still see the preview
+            p.setAlpha(front_screen_flash_alpha);
             canvas.drawRect(0.0f, 0.0f, width, height, p);
             p.setAlpha(255);
 
             // 2) Edge glow: a radial gradient that is transparent in the centre and bright white at
-            // the edges, producing a white halo around the border.
+            // the edges, producing a white halo around the border (scaled with the flash brightness).
             float radius = (float)( Math.sqrt((double)width * width + (double)height * height) / 2.0 );
             if( radius > 0.0f ) {
+                int mid_alpha = Math.round(110 * flash_scale);
+                int edge_alpha = Math.round(255 * flash_scale);
                 RadialGradient gradient = new RadialGradient(
                         width / 2.0f, height / 2.0f, radius,
-                        new int[] { Color.TRANSPARENT, Color.argb(110, 255, 255, 255), Color.argb(255, 255, 255, 255) },
+                        new int[] { Color.TRANSPARENT, Color.argb(mid_alpha, 255, 255, 255), Color.argb(edge_alpha, 255, 255, 255) },
                         new float[] { 0.0f, 0.55f, 1.0f },
                         Shader.TileMode.CLAMP);
                 p.setShader(gradient);

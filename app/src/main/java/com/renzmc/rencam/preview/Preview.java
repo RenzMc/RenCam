@@ -5451,6 +5451,16 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             return;
         }
         else if( ( !is_video || photo_snapshot ) && this.phase == PHASE_TAKING_PHOTO ) {
+            // RenCam Live Photo: while a Live Photo is being captured the shutter is put into
+            // PHASE_TAKING_PHOTO (to show the "taking photo" indicator during the post-roll). A press
+            // during that window must NOT be swallowed - instead it is queued so the user can shoot
+            // many Live Photos in a row without waiting for the previous one to finish. The queued
+            // presses are recorded one-by-one in the background (see LivePhotoManager.queuePress()).
+            if( !is_video && applicationInterface.isLivePhotoActive() && applicationInterface.startLivePhotoCapture() ) {
+                if( MyDebug.LOG )
+                    Log.d(TAG, "live photo active - queued another live photo capture");
+                return;
+            }
             // user requested take photo while already taking photo
             if( MyDebug.LOG )
                 Log.d(TAG, "already taking a photo");
@@ -5902,8 +5912,64 @@ public class Preview implements SurfaceHolder.Callback, TextureView.SurfaceTextu
             Log.e(TAG, "startLivePhotoBuffer: camera not open");
             return false;
         }
+        // RenCam Live Photo "super HD": record the background buffer at the highest resolution the
+        // device supports (instead of the user's selected video quality), so the cover frame that is
+        // extracted from the buffer - and the motion clip embedded in the Live Photo - are as sharp as
+        // possible. If the maximum size can't be used for a MediaRecorder session (some devices refuse
+        // an unusual size), fall back to the normal video profile so a Live Photo is always produced.
+        VideoProfile max_profile = getLivePhotoVideoProfile();
+        max_profile.record_audio = withAudio;
+        if( startLivePhotoBufferWithProfile(outputFile, max_profile) ) {
+            return true;
+        }
+        VideoProfile fallback = getVideoProfile();
+        fallback.record_audio = withAudio;
+        if( max_profile.videoFrameWidth != fallback.videoFrameWidth || max_profile.videoFrameHeight != fallback.videoFrameHeight ) {
+            if( MyDebug.LOG )
+                Log.d(TAG, "falling back to normal video profile for live photo buffer");
+            if( startLivePhotoBufferWithProfile(outputFile, fallback) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** RenCam Live Photo: returns a video profile that records the background buffer at the highest
+     *  resolution the device supports, so the Live Photo cover is as sharp as possible. The audio and
+     *  codec settings are taken from the normal video profile (so they stay valid); only the video
+     *  resolution (and a proportionally scaled bitrate) is overridden. Falls back to the normal video
+     *  profile when the maximum size isn't known. */
+    public VideoProfile getLivePhotoVideoProfile() {
         VideoProfile profile = getVideoProfile();
-        profile.record_audio = withAudio;
+        if( camera_controller == null ) {
+            return profile;
+        }
+        CameraController.Size max_size = video_quality_handler.getMaxSupportedVideoSize();
+        if( max_size == null || max_size.width <= 0 || max_size.height <= 0 ) {
+            return profile;
+        }
+        if( max_size.width <= profile.videoFrameWidth && max_size.height <= profile.videoFrameHeight ) {
+            // already at (or above) the maximum supported size - nothing to do
+            return profile;
+        }
+        // Scale the bitrate to the higher resolution so the buffer keeps a good quality (and stays
+        // within a sane bound).
+        long current_pixels = (long)profile.videoFrameWidth * (long)profile.videoFrameHeight;
+        long max_pixels = (long)max_size.width * (long)max_size.height;
+        if( current_pixels > 0 && max_pixels > current_pixels ) {
+            double scale = (double)max_pixels / (double)current_pixels;
+            profile.videoBitRate = (int)Math.min((long)(profile.videoBitRate * scale), 100000000L);
+        }
+        profile.videoFrameWidth = max_size.width;
+        profile.videoFrameHeight = max_size.height;
+        if( MyDebug.LOG )
+            Log.d(TAG, "live photo buffer resolution: " + profile.videoFrameWidth + " x " + profile.videoFrameHeight + " bitrate " + profile.videoBitRate);
+        return profile;
+    }
+
+    /** RenCam Live Photo: starts the background buffer MediaRecorder with the supplied profile.
+     *  Returns true on success, false otherwise (the caller may retry with a different profile). */
+    private boolean startLivePhotoBufferWithProfile(File outputFile, VideoProfile profile) {
         MediaRecorder local_recorder = new MediaRecorder();
         try {
             camera_controller.unlock();

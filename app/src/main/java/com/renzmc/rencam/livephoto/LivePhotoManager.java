@@ -66,40 +66,49 @@ public class LivePhotoManager {
     /**
      * iPhone-style flash burst timings, measured in milliseconds after the shutter.
      *
-     * <p>Research (see README / commit notes): an iPhone's True Tone flash fires a short <b>pre-flash</b>
-     * to meter the scene, then the <b>main flash</b> for the actual exposure, and - on the newer
-     * "Slow Sync" flash - it <b>fires the flash in intervals</b> so the subject and background are
-     * exposed differently. That is the "kedip-kedip" (blink-blink-blink) look people recognise from
-     * iPhone flash photos. The gap between the pre-flash and the main flash is roughly 1/20 second
-     * (~50ms) on most cameras.</p>
-     *
-     * <p>We reproduce that here as a three-pulse burst:</p>
+     * <p>An iPhone's True Tone flash does not fire a single burst - it fires a whole <b>sequence</b>
+     * that the user perceives as "wait ... flash ... blink ... CCEKREK". We reproduce that exact
+     * rhythm here, as a four-phase burst:</p>
      * <ol>
-     *     <li><b>pre-flash</b> (metering) - short, so it reads as the first blink;</li>
-     *     <li><b>main flash</b> - the still is sampled here, so the photo is always lit;</li>
-     *     <li><b>flicker flash</b> - a second blink <i>after</i> the capture, the Slow-Sync interval
-     *         that gives the iPhone its distinctive flicker.</li>
+     *     <li><b>wait</b> - a short pause before anything fires (the flash "charges up");</li>
+     *     <li><b>main flash</b> - the first, softer flash. It is deliberately <b>dimmer</b> and
+     *         <b>longer</b> than the others (it is the metering / fill light), so it reads as a warm
+     *         glow rather than a harsh pop;</li>
+     *     <li><b>flicker</b> - after the main flash cuts out there is a short dark gap, then a
+     *         <b>very quick blink</b> - the startling "kedip" that makes people flinch;</li>
+     *     <li><b>capture flash</b> - immediately after the blink, the <b>brightest, maxed-out</b>
+     *         flash - the "cekrek" of a real camera. <b>The still is sampled here</b> (see
+     *         {@link #COVER_DELAY_MS}), so the photo is always taken at the moment of maximum light.</li>
      * </ol>
      *
      * <p>Each pulse must be long enough to be captured by the 30fps video buffer: one frame is
      * ~33ms, so a pulse shorter than ~66ms can fall almost entirely between two frames and barely
-     * show up in the clip. The flicker in particular was originally only 65ms (~2 frames), which is
-     * why it looked fine in real life but was almost invisible in the recorded video - it has been
-     * lengthened to ~140ms (~4 frames) so the "kedip" is clearly visible in the motion.</p>
+     * show up in the clip. The main flash and the capture flash are both comfortably long; the
+     * flicker is intentionally short (a blink) but still spans ~1-2 frames.</p>
      *
-     * <p>The still is sampled during the main flash (see {@link #COVER_DELAY_MS}).</p>
+     * <p>The still is sampled during the <b>capture flash</b> (see {@link #COVER_DELAY_MS}), not the
+     * main flash as in earlier versions - exactly as the user requested.</p>
      */
-    private static final int FLASH_PRE_START_MS = 0;       // pre-flash (metering) starts
-    private static final int FLASH_PRE_END_MS = 50;        // pre-flash ends
-    private static final int FLASH_MAIN_START_MS = 100;    // main flash starts (after a ~1/20s dark gap)
-    private static final int FLASH_MAIN_END_MS = 220;      // main flash ends (~120ms, clearly lit)
-    private static final int FLASH_FLICKER_START_MS = 280; // flicker (Slow-Sync interval) starts
-    private static final int FLASH_FLICKER_END_MS = 420;   // flicker ends (~140ms so it shows in video)
+    private static final int FLASH_MAIN_START_MS = 120;    // main flash starts (after the "wait")
+    private static final int FLASH_MAIN_END_MS = 360;      // main flash ends (~240ms - longer than the others)
+    private static final int FLASH_FLICKER_START_MS = 400; // quick flicker starts (after a short dark gap)
+    private static final int FLASH_FLICKER_END_MS = 445;   // flicker ends (~45ms - a startling blink)
+    private static final int FLASH_CAPTURE_START_MS = 470; // capture flash starts (just after the flicker)
+    private static final int FLASH_CAPTURE_END_MS = 740;   // capture flash ends (~270ms - the bright "cekrek")
     /**
-     * How long after the shutter the cover frame is taken. This is inside the main flash window
-     * (FLASH_MAIN_START_MS .. FLASH_MAIN_END_MS), so the still is always lit by the flash.
+     * How long after the shutter the cover frame is taken. This is inside the <b>capture flash</b>
+     * window (FLASH_CAPTURE_START_MS .. FLASH_CAPTURE_END_MS), so the still is always lit by the
+     * brightest flash - the "cekrek" moment.
      */
-    private static final int COVER_DELAY_MS = 160;
+    private static final int COVER_DELAY_MS = 580;
+    /**
+     * Screen-flash brightness (alpha 0..255) for the front camera, which has no LED: the main flash
+     * is deliberately dimmer, the flicker is medium, and the capture flash is maxed out. (An LED
+     * can't be dimmed, so on the back camera every pulse is a full torch.)
+     */
+    private static final int FLASH_MAIN_ALPHA = 110;
+    private static final int FLASH_FLICKER_ALPHA = 190;
+    private static final int FLASH_CAPTURE_ALPHA = 255;
     /**
      * Extra recording time kept after the post-roll before the buffer is stopped. MediaRecorder can
      * drop the last few frames when it is stopped, so we record a little longer than the 3s window
@@ -111,19 +120,6 @@ public class LivePhotoManager {
      * restarted, so it can't grow without limit while the camera sits idle.
      */
     private static final int BUFFER_MAX_MS = 30000;
-
-    /**
-     * How long we wait for the cover still to be saved before giving up and freeing the pending
-     * video. Without this, a still that failed to save (or whose save callback never arrived) would
-     * leave {@link #waiting_for_cover} stuck true forever, which made every following shutter press
-     * get swallowed - the "took 5 photos but only 1-2 were saved" bug.
-     *
-     * <p>Raised from 12s to 30s: on a busy/slow device the background image-saver queue can take a
-     * while to write a large JPEG, and the old 12s timeout could fire <i>while the save was still in
-     * progress</i> - it then deleted the video, so when the still finally saved there was nothing
-     * left to package and it stayed a plain JPEG (the "sometimes it isn't a Live Photo" bug).</p>
-     */
-    private static final long WAITING_FOR_COVER_TIMEOUT_MS = 30000L;
 
     /**
      * Maximum number of shutter presses that can be queued while a Live Photo is still finishing.
@@ -168,12 +164,6 @@ public class LivePhotoManager {
     // ---- Capture state ---------------------------------------------------------------------------
     /** True between the shutter press and the end of the post-roll. */
     private volatile boolean capturing;
-    /** True once the video has been recorded and we are waiting for the cover still to be saved. */
-    private volatile boolean waiting_for_cover;
-    /** The recorded (already trimmed) video file waiting to be packaged into the saved cover still. */
-    private File pending_video_file;
-    /** The presentation timestamp (microseconds) of the cover frame within the recorded video. */
-    private long pending_presentation_us;
     /** How far into the buffer the shutter was pressed (ms). */
     private long shutter_offset_ms;
 
@@ -185,20 +175,29 @@ public class LivePhotoManager {
 
     /**
      * Number of captures that have been started but not yet fully finished (recorded, processed,
-     * saved and packaged). This is the key to processing Live Photos strictly <b>one at a time</b>:
-     * a new capture is only allowed to start when this is 0.
-     *
-     * <p>Why this matters: previously there was a window between the end of the post-roll
-     * ({@code capturing = false}) and {@link #processCapturedVideo} setting {@link #waiting_for_cover}
-     * in which a second capture could start while the first was still being processed. The two
-     * captures then fought over the single {@link #pending_video_file} slot, so one of them was left
-     * as a plain JPEG (the "sometimes it isn't a Live Photo" bug). Serialising captures fixes it:
-     * photo 1 is finished completely before photo 2 begins.</p>
+     * saved and packaged). This is now used <b>only</b> to keep the foreground service alive while
+     * there is work to do - it deliberately does <b>not</b> gate new captures any more. The user can
+     * shoot as fast as they like; every capture is finalised one-by-one on {@link #finalize_executor}.
      */
     private int captures_in_flight = 0;
 
-    /** Fires if the cover still doesn't get saved in time, so {@link #waiting_for_cover} can't stick. */
-    private Runnable waiting_timeout_runnable;
+    /**
+     * Holds the file/uri of the cover still that was just saved, for the finalisation thread.
+     *
+     * <p>The cover save is performed <b>synchronously on the finalisation thread</b> (see
+     * {@code MyApplicationInterface.saveLivePhotoCover()}), so {@link #onStillSaved} can hand the
+     * result straight back to the {@link #finalizeCapture} call that triggered it - without any
+     * shared "pending" slot that a second capture could clobber. That shared slot was the reason the
+     * old design had to process captures strictly one at a time (and why rapid shots had to wait).
+     * Using a {@link ThreadLocal} means a normal (non-Live-Photo) save happening on the image-saver
+     * thread can never fill this by mistake.</p>
+     */
+    private static final class CoverResult {
+        File file;
+        Uri uri;
+        boolean done;
+    }
+    private final ThreadLocal<CoverResult> cover_result = new ThreadLocal<>();
 
     private Runnable post_roll_runnable;
     /** Adaptive post-roll used for the current capture (ms after the shutter). */
@@ -431,20 +430,6 @@ public class LivePhotoManager {
                 Log.d(TAG, "live photo not active");
             return false;
         }
-        if( capturing || waiting_for_cover || captures_in_flight > 0 ) {
-            // A Live Photo is still being recorded/processed. Instead of silently swallowing the
-            // press (which lost photos when the user shot a quick burst), queue it so it is captured
-            // as soon as the previous Live Photo has been fully finished (see maybeStartPendingCapture()).
-            if( pending_captures < MAX_PENDING_CAPTURES ) {
-                pending_captures++;
-                if( MyDebug.LOG )
-                    Log.d(TAG, "live photo in progress - queued shutter press, pending=" + pending_captures);
-                if( host != null ) {
-                    host.showToast(R.string.live_photo_queued);
-                }
-            }
-            return true;
-        }
         if( preview == null || preview.getCameraController() == null ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "camera not open");
@@ -456,15 +441,28 @@ public class LivePhotoManager {
             return false;
         }
 
-        // The buffer should already be running (started when the preview started). If for some reason
-        // it isn't, try to start one now. If it still can't start (for example the camera session
-        // doesn't support video recording), DON'T swallow the shutter: fall back to a normal still so
-        // the user always gets a photo instead of nothing.
+        // If a capture is already being recorded, queue the press. The user can keep shooting as fast
+        // as they like - queued presses are captured one-by-one as soon as the buffer is ready again
+        // (see maybeStartPendingCapture()), and each is finalised in the background.
+        if( capturing ) {
+            queuePress();
+            return true;
+        }
+
+        // The buffer is stopped briefly after every capture while the camera reconnects. If it isn't
+        // running right now, try to (re)start it. If it can't start at all, fall back to a normal
+        // still so the user never loses the shot.
         if( !buffer_running ) {
             if( MyDebug.LOG )
                 Log.d(TAG, "buffer not running - starting one now");
             startBuffer();
             if( !buffer_running ) {
+                // If a capture is still being finalised in the background, or a restart is pending,
+                // queue the press rather than falling back - the buffer will come back shortly.
+                if( captures_in_flight > 0 || pending_captures > 0 ) {
+                    queuePress();
+                    return true;
+                }
                 if( MyDebug.LOG )
                     Log.d(TAG, "buffer unavailable - falling back to a normal photo");
                 if( host != null ) {
@@ -478,21 +476,41 @@ public class LivePhotoManager {
     }
 
     /**
+     * Queues a shutter press so it is captured once the buffer is ready again. This is what lets the
+     * user shoot many Live Photos in a row without waiting: the press is remembered, and the actual
+     * recording starts as soon as the previous capture has finished recording (the finalisation of
+     * earlier photos keeps running in the background meanwhile).
+     */
+    private void queuePress() {
+        if( pending_captures < MAX_PENDING_CAPTURES ) {
+            pending_captures++;
+            if( MyDebug.LOG )
+                Log.d(TAG, "live photo in progress - queued shutter press, pending=" + pending_captures);
+            if( host != null ) {
+                host.showToast(R.string.live_photo_queued);
+            }
+        }
+        // If the buffer is running and nothing is being recorded, start the queued capture right away.
+        maybeStartPendingCapture();
+    }
+
+    /**
      * Starts a Live Photo capture using the already-running buffer. Separated from
      * {@link #captureLivePhoto()} so a queued press (or the pending-capture drain) can start a
      * capture without re-running the "is a capture already in progress" checks.
      */
     private synchronized void startCaptureInternal() {
-        if( capturing || waiting_for_cover || captures_in_flight > 0 || !buffer_running ) {
+        if( capturing || !buffer_running ) {
             return;
         }
         shutter_offset_ms = SystemClock.elapsedRealtime() - buffer_start_ms;
         if( MyDebug.LOG )
             Log.d(TAG, "shutter_offset_ms: " + shutter_offset_ms);
 
-        // This capture is now in flight; it will only be released once the still has been saved and
-        // the Motion Photo packaged (or on failure / timeout). Keeping captures_in_flight at 1 means
-        // no other capture can start meanwhile, so rapid shots are processed strictly one by one.
+        // This capture is now in flight; it is released once the still has been saved and the Motion
+        // Photo packaged (or on failure). captures_in_flight only keeps the foreground service alive
+        // while there is work to do - it does NOT block new captures, so the user can keep shooting
+        // while this one is finalised in the background.
         captures_in_flight++;
         // Ask Android to keep the process alive while we record + finalise (foreground service).
         updateForegroundService();
@@ -510,7 +528,6 @@ public class LivePhotoManager {
         startFlashBurst(front);
 
         capturing = true;
-        waiting_for_cover = false;
 
         // Update the preview state: hide the GUI and show the "taking photo" indicator during the
         // post-roll (the shutter was already put into PHASE_TAKING_PHOTO by takePicture()).
@@ -549,7 +566,7 @@ public class LivePhotoManager {
             public void run() {
                 boolean start = false;
                 synchronized( LivePhotoManager.this ) {
-                    if( pending_captures > 0 && !capturing && !waiting_for_cover && captures_in_flight == 0
+                    if( pending_captures > 0 && !capturing
                             && buffer_running && isActive() && preview != null && !preview.isVideo()
                             && preview.isPreviewStarted() ) {
                         pending_captures--;
@@ -613,48 +630,6 @@ public class LivePhotoManager {
         }
     }
 
-    /**
-     * Arms the safety timeout that fires if the cover still never gets saved (e.g. the save failed,
-     * or its callback was lost). Without this, {@link #waiting_for_cover} could stay true forever and
-     * swallow every following shutter press - the "took 5 photos but only 1-2 were saved" bug.
-     */
-    private void scheduleWaitingTimeout() {
-        cancelWaitingTimeout();
-        waiting_timeout_runnable = new Runnable() {
-            @Override
-            public void run() {
-                File to_delete = null;
-                synchronized( LivePhotoManager.this ) {
-                    waiting_timeout_runnable = null;
-                    if( waiting_for_cover ) {
-                        Log.w(TAG, "timed out waiting for cover still to save - freeing pending video");
-                        waiting_for_cover = false;
-                        to_delete = pending_video_file;
-                        pending_video_file = null;
-                        // Release the in-flight slot so the queue can move on (the save clearly isn't
-                        // coming back).
-                        if( captures_in_flight > 0 ) {
-                            captures_in_flight--;
-                        }
-                    }
-                }
-                deleteQuietly(to_delete);
-                updateForegroundService();
-                // The buffer may already be running again, so drain any queued shutter press now.
-                maybeStartPendingCapture();
-            }
-        };
-        handler.postDelayed(waiting_timeout_runnable, WAITING_FOR_COVER_TIMEOUT_MS);
-    }
-
-    /** Cancels the safety timeout armed by {@link #scheduleWaitingTimeout()}. */
-    private void cancelWaitingTimeout() {
-        if( waiting_timeout_runnable != null ) {
-            handler.removeCallbacks(waiting_timeout_runnable);
-            waiting_timeout_runnable = null;
-        }
-    }
-
     /** Called once the post-roll has elapsed: stop the buffer, trim it and extract the cover frame. */
     private synchronized void onPostRollElapsed() {
         if( MyDebug.LOG )
@@ -694,98 +669,144 @@ public class LivePhotoManager {
 
         // Run the whole finalization pipeline on the dedicated background executor (see
         // finalize_executor) so it never blocks the UI and keeps working while the activity is paused.
+        // Because the executor is single-threaded, captures are finalised strictly one at a time -
+        // even though the user may have queued several shots in the meantime.
         finalize_executor.execute(new Runnable() {
             @Override
             public void run() {
-                processCapturedVideo(video_file, offset_ms, post_roll, flash_used);
+                finalizeCapture(video_file, offset_ms, post_roll, flash_used);
             }
         });
     }
+
     /**
      * Trims the recorded buffer down to the {@code [shutter-1.5s, shutter+1.5s]} window, extracts the
-     * cover frame at the shutter timestamp, and hands it to the host to be saved.
+     * cover frame at the shutter timestamp, saves it through the normal image pipeline and packages
+     * the video into it - all as one <b>self-contained</b> unit of work.
+     *
+     * <p>This runs on the single-threaded {@link #finalize_executor}, so captures are finalised
+     * strictly one at a time. Because the whole pipeline (including the cover save, which is made
+     * synchronous for Live Photos - see {@code MyApplicationInterface.saveLivePhotoCover()}) happens
+     * inside this one method, there is no shared "pending" state that a second capture could clobber.
+     * That is exactly what lets the user shoot many Live Photos in a row while they are processed
+     * one-by-one in the background.</p>
      */
-    private void processCapturedVideo(File video_file, long offset_ms, long post_roll_ms, boolean flash_used) {
-        long duration = LivePhotoHelper.getVideoDuration(context, Uri.fromFile(video_file));
-        if( duration <= 0 ) {
-            // Fall back to the elapsed buffer time if the container didn't report a duration.
-            duration = offset_ms + post_roll_ms;
-        }
+    private void finalizeCapture(File video_file, long offset_ms, long post_roll_ms, boolean flash_used) {
+        File source = null;
+        try {
+            long duration = LivePhotoHelper.getVideoDuration(context, Uri.fromFile(video_file));
+            if( duration <= 0 ) {
+                // Fall back to the elapsed buffer time if the container didn't report a duration.
+                duration = offset_ms + post_roll_ms;
+            }
 
-        long window_start = Math.max(0L, offset_ms - PRE_MS);
-        long window_end = Math.min(duration, offset_ms + post_roll_ms);
-        if( window_end <= window_start ) {
-            window_end = Math.min(duration, window_start + TOTAL_MS);
-        }
+            long window_start = Math.max(0L, offset_ms - PRE_MS);
+            long window_end = Math.min(duration, offset_ms + post_roll_ms);
+            if( window_end <= window_start ) {
+                window_end = Math.min(duration, window_start + TOTAL_MS);
+            }
 
-        File trimmed_file = new File(context.getCacheDir(),
-                "rencam_live_trim_" + System.currentTimeMillis() + ".mp4");
-        LivePhotoHelper.TrimResult trim = LivePhotoHelper.trimVideo(context, video_file, trimmed_file, window_start, window_end);
-        boolean trimmed = trim.success && trimmed_file.exists() && trimmed_file.length() > 100;
-        File source = trimmed ? trimmed_file : video_file;
-        // The source timestamp that corresponds to time 0 in `source`. Trimming seeks to the nearest
-        // keyframe (usually a little before window_start), so the trimmed clip's timeline is offset
-        // by this amount - without it the still would land at a random point instead of on the flash.
-        long source_start_ms = trimmed ? trim.startMs : 0L;
-        if( trimmed ) {
-            // Trimming succeeded - the trimmed file is the one we keep, so the raw buffer can go now.
-            deleteQuietly(video_file);
-        }
-        else {
-            // Trimming failed - use the whole clip, and discard the (empty/partial) trim output.
-            deleteQuietly(trimmed_file);
-        }
+            File trimmed_file = new File(context.getCacheDir(),
+                    "rencam_live_trim_" + System.currentTimeMillis() + ".mp4");
+            LivePhotoHelper.TrimResult trim = LivePhotoHelper.trimVideo(context, video_file, trimmed_file, window_start, window_end);
+            boolean trimmed = trim.success && trimmed_file.exists() && trimmed_file.length() > 100;
+            source = trimmed ? trimmed_file : video_file;
+            // The source timestamp that corresponds to time 0 in `source`. Trimming seeks to the
+            // nearest keyframe (usually a little before window_start), so the trimmed clip's timeline
+            // is offset by this amount - without it the still would land at a random point instead of
+            // on the flash.
+            long source_start_ms = trimmed ? trim.startMs : 0L;
+            if( trimmed ) {
+                // Trimming succeeded - the trimmed file is the one we keep, so the raw buffer can go.
+                deleteQuietly(video_file);
+            }
+            else {
+                // Trimming failed - use the whole clip, and discard the (empty/partial) trim output.
+                deleteQuietly(trimmed_file);
+            }
 
-        // The cover frame is taken at the shutter moment plus a small delay so the flash has lit it,
-        // mapped onto the trimmed clip's timeline using the actual trim start.
-        long cover_ms = (offset_ms + COVER_DELAY_MS) - source_start_ms;
-        long cover_duration = LivePhotoHelper.getVideoDuration(context, Uri.fromFile(source));
-        if( cover_duration > 0 && cover_ms >= cover_duration ) {
-            cover_ms = Math.max(0L, cover_duration - 50L);
-        }
-        if( cover_ms < 0 ) {
-            cover_ms = 0L;
-        }
+            // The cover frame is taken at the shutter moment plus a small delay so the flash has lit
+            // it, mapped onto the trimmed clip's timeline using the actual trim start.
+            long cover_ms = (offset_ms + COVER_DELAY_MS) - source_start_ms;
+            long cover_duration = LivePhotoHelper.getVideoDuration(context, Uri.fromFile(source));
+            if( cover_duration > 0 && cover_ms >= cover_duration ) {
+                cover_ms = Math.max(0L, cover_duration - 50L);
+            }
+            if( cover_ms < 0 ) {
+                cover_ms = 0L;
+            }
 
-        final byte[] cover = extractCoverJpegSynced(source, cover_ms, getTargetStillAspectRatio(), flash_used);
-        if( cover == null ) {
-            Log.e(TAG, "failed to extract cover frame from live photo video");
-            deleteQuietly(source);
-            releaseCapture();
-            return;
-        }
+            final byte[] cover = extractCoverJpegSynced(source, cover_ms, getTargetStillAspectRatio(), flash_used);
+            if( cover == null ) {
+                Log.e(TAG, "failed to extract cover frame from live photo video");
+                return;
+            }
 
-        // Register the pending video *before* saving, so that when the still is saved (possibly
-        // synchronously) the onStillSaved() callback finds it. NOTE: `source` (the trimmed clip) is
-        // kept alive here and is only deleted once packaging has finished - deleting it now would
-        // leave the still as a plain JPEG.
-        synchronized( LivePhotoManager.this ) {
-            pending_video_file = source;
-            pending_presentation_us = cover_ms * 1000L;
-            waiting_for_cover = true;
-            scheduleWaitingTimeout();
-        }
+            // Save the cover synchronously on this (background) thread and capture the resulting
+            // file/uri straight back, so the packaging below is fully self-contained. The save is
+            // made synchronous by MyApplicationInterface.saveLivePhotoCover() (it forces
+            // do_in_background=false), which is what allows onStillSaved() to fill `result` before
+            // saveLivePhotoCover() returns.
+            CoverResult result = new CoverResult();
+            cover_result.set(result);
+            boolean saved;
+            try {
+                saved = host != null && host.saveLivePhotoCover(cover, new Date());
+            }
+            finally {
+                cover_result.remove();
+            }
+            if( !saved || !result.done ) {
+                Log.e(TAG, "failed to save live photo cover frame");
+                return;
+            }
 
-        // Save the cover on the background finalization executor (saveImage() is designed to be
-        // called off the main thread - normal captures call it from the camera callback thread), so
-        // the whole Live Photo pipeline runs in the background and the UI is never blocked.
-        finalize_executor.execute(new Runnable() {
-            @Override
-            public void run() {
-                boolean ok = host != null && host.saveLivePhotoCover(cover, new Date());
-                if( !ok ) {
-                    Log.e(TAG, "failed to save live photo cover frame");
-                    File to_delete;
-                    synchronized( LivePhotoManager.this ) {
-                        waiting_for_cover = false;
-                        to_delete = pending_video_file;
-                        pending_video_file = null;
+            // Package the (trimmed) video into the saved still, turning it into a Motion Photo. The
+            // embedded video is cropped to the target aspect ratio (9:16) so it matches the cover.
+            File video_to_package = source;
+            File cropped_file = null;
+            try {
+                double target_ratio = getTargetVideoAspectRatio();
+                if( target_ratio > 0.0 && source.exists() ) {
+                    cropped_file = new File(context.getCacheDir(),
+                            "rencam_live_crop_" + System.currentTimeMillis() + ".mp4");
+                    if( VideoCropper.cropToAspectRatio(source, cropped_file, target_ratio) ) {
+                        video_to_package = cropped_file;
                     }
-                    deleteQuietly(to_delete);
-                    releaseCapture();
+                    else {
+                        deleteQuietly(cropped_file);
+                        cropped_file = null;
+                    }
+                }
+                long presentation_us = cover_ms * 1000L;
+                boolean ok = packageStill(result.file, result.uri, video_to_package, presentation_us);
+                // If the (cropped) video failed to package, retry with the original video: a crop
+                // problem must never cost the user their Live Photo (it would stay a plain JPEG).
+                if( !ok && cropped_file != null && source.exists() ) {
+                    if( MyDebug.LOG )
+                        Log.d(TAG, "packaging with cropped video failed - retrying with original");
+                    ok = packageStill(result.file, result.uri, source, presentation_us);
+                }
+                if( !ok ) {
+                    Log.e(TAG, "failed to package live photo after retry - still left as plain JPEG");
                 }
             }
-        });
+            finally {
+                if( cropped_file != null ) {
+                    deleteQuietly(cropped_file);
+                }
+            }
+        }
+        catch(Exception e) {
+            Log.e(TAG, "failed to finalise live photo", e);
+        }
+        finally {
+            // The (trimmed) source video is no longer needed once packaging has finished.
+            deleteQuietly(source);
+            // This capture is now completely finished (success or failure), so let the next queued
+            // shutter press start.
+            releaseCapture();
+        }
     }
 
     /** Extracts a single frame from the recorded video and encodes it as JPEG bytes. */
@@ -799,7 +820,12 @@ public class LivePhotoManager {
             // same framing as a normal photo - the video buffer may be a wider 16:9 crop.
             bitmap = cropToAspect(bitmap, target_aspect_ratio);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, bos);
+            // RenCam Live Photo "super HD": encode the extracted cover at the maximum JPEG quality so
+            // there is no visible generation loss before the still goes through the image pipeline
+            // (which re-encodes it once more when it crops to 9:16). The cover is taken from a video
+            // frame recorded at the highest resolution the device supports (see
+            // Preview.getLivePhotoVideoProfile()), so this keeps the still as sharp as possible.
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bos);
             return bos.toByteArray();
         }
         finally {
@@ -857,21 +883,21 @@ public class LivePhotoManager {
     }
 
     /**
-     * Finds the timestamp (ms) of the frame lit by the <b>main</b> flash - i.e. the cover moment.
-     * Returns -1 if no frame could be sampled.
+     * Finds the timestamp (ms) of the frame lit by the <b>capture flash</b> - the brightest pulse,
+     * i.e. the cover moment. Returns -1 if no frame could be sampled.
      *
-     * <p>The burst has two bright pulses (the main flash and the trailing flicker), so the single
-     * brightest frame could be either one. We want the main flash - the actual capture moment - so
-     * instead of just taking the brightest frame we take the frame that is nearly as bright as the
-     * brightest but <b>closest to the expected shutter time</b>. That way the still always lands on
-     * the main flash and never on the later flicker.</p>
+     * <p>The burst has several lit pulses (the dimmer main flash, the quick flicker and the bright
+     * capture flash), so the single brightest frame should be the capture flash. To be robust we
+     * take the frame that is nearly as bright as the brightest but <b>closest to the expected cover
+     * time</b> (which sits inside the capture-flash window), so the still always lands on the
+     * capture flash - the "cekrek" - and never on the earlier main flash or the flicker.</p>
      */
     private long findFlashFrameMs(File video_file, long expected_ms) {
-        // The flash burst lights the scene from about 100ms to 420ms after the shutter, and the still
-        // is expected a little after the shutter; search a window that comfortably covers that (plus a
+        // The capture flash lights the scene from about 470ms to 740ms after the shutter, and the
+        // still is expected inside that window; search a window that comfortably covers it (plus a
         // little slack for timeline drift).
-        final long window_before = 150L;
-        final long window_after = 550L;
+        final long window_before = 250L;
+        final long window_after = 300L;
         final long step = 60L;
         Uri uri = Uri.fromFile(video_file);
         long duration = LivePhotoHelper.getVideoDuration(context, uri);
@@ -908,8 +934,10 @@ public class LivePhotoManager {
         if( times.isEmpty() ) {
             return -1L;
         }
-        // Among the frames that are nearly as bright as the brightest (both flash pulses qualify),
-        // pick the one closest to the expected shutter time - that is the main flash.
+        // Among the frames that are nearly as bright as the brightest, pick the one closest to the
+        // expected cover time. With the iPhone-style burst the brightest pulse is the capture flash
+        // (the "cekrek"), and the expected cover time sits inside its window - so this reliably lands
+        // on the capture flash and never on the earlier, dimmer main flash or the flicker.
         final double threshold = max_brightness * 0.92;
         long best_ms = -1L;
         long best_dist = Long.MAX_VALUE;
@@ -1037,51 +1065,39 @@ public class LivePhotoManager {
     }
 
     /**
-     * Called once the cover still has been saved to disk, so we know which file to package the video
-     * into (turning the plain JPEG into a Motion Photo).
+     * Called once the cover still has been saved to disk. Because the Live Photo cover save is
+     * synchronous (it runs on the finalisation thread inside {@link #finalizeCapture}), this hands the
+     * saved file straight back to the {@link #finalizeCapture} call that triggered it - via the
+     * thread-local {@link #cover_result} - rather than through a shared "pending" slot. Normal
+     * (non-Live-Photo) saves run on the image-saver thread, so their thread-local is null and they are
+     * ignored here.
      */
-    public synchronized void onStillSaved(File stillFile) {
+    public void onStillSaved(File stillFile) {
         if( MyDebug.LOG )
             Log.d(TAG, "onStillSaved(file): " + (stillFile != null ? stillFile.getAbsolutePath() : "null"));
-        if( !waiting_for_cover ) {
-            return;
+        CoverResult result = cover_result.get();
+        if( result == null ) {
+            return; // not a Live Photo cover save
         }
-        cancelWaitingTimeout();
-        waiting_for_cover = false;
-        final File video_file = pending_video_file;
-        final long presentation_us = pending_presentation_us;
-        pending_video_file = null;
-        // The buffer is likely running again by now; capture any press the user queued meanwhile.
-        maybeStartPendingCapture();
-        if( video_file == null || stillFile == null || !stillFile.exists() ) {
-            deleteQuietly(video_file);
-            return;
-        }
-        startPackaging(stillFile, null, video_file, presentation_us);
+        result.file = stillFile;
+        result.uri = null;
+        result.done = true;
     }
 
     /**
-     * Called once the cover still has been saved to a content {@link Uri} (MediaStore or SAF), so we
-     * know which file to package the video into.
+     * Called once the cover still has been saved to a content {@link Uri} (MediaStore or SAF). See
+     * {@link #onStillSaved(File)} for why this uses a thread-local result.
      */
-    public synchronized void onStillSaved(Uri stillUri) {
+    public void onStillSaved(Uri stillUri) {
         if( MyDebug.LOG )
             Log.d(TAG, "onStillSaved(uri): " + stillUri);
-        if( !waiting_for_cover ) {
-            return;
+        CoverResult result = cover_result.get();
+        if( result == null ) {
+            return; // not a Live Photo cover save
         }
-        cancelWaitingTimeout();
-        waiting_for_cover = false;
-        final File video_file = pending_video_file;
-        final long presentation_us = pending_presentation_us;
-        pending_video_file = null;
-        // The buffer is likely running again by now; capture any press the user queued meanwhile.
-        maybeStartPendingCapture();
-        if( video_file == null || stillUri == null ) {
-            deleteQuietly(video_file);
-            return;
-        }
-        startPackaging(null, stillUri, video_file, presentation_us);
+        result.uri = stillUri;
+        result.file = null;
+        result.done = true;
     }
 
     /** Aborts any in-flight capture and discards the recorded video. */
@@ -1095,10 +1111,7 @@ public class LivePhotoManager {
         }
         cancelFlashSteps();
         cancelBufferCap();
-        cancelWaitingTimeout();
         capturing = false;
-        waiting_for_cover = false;
-        pending_video_file = null;
         pending_captures = 0;
         // No capture is in flight any more (the in-progress one, if any, will fail its own checks and
         // release itself); reset the counter so the queue is clean and the foreground service stops.
@@ -1121,59 +1134,6 @@ public class LivePhotoManager {
     // ---------------------------------------------------------------------------------------------
     // Finalize: package the video into the saved still
     // ---------------------------------------------------------------------------------------------
-
-    /** Runs the (potentially slow) packaging on a background thread. */
-    private void startPackaging(final File still_file, final Uri still_uri, final File video_file,
-                                final long presentation_us) {
-        finalize_executor.execute(new Runnable() {
-            @Override
-            public void run() {
-                File video_to_package = video_file;
-                File cropped_file = null;
-                boolean ok = false;
-                try {
-                    // Crop the embedded video to the chosen aspect ratio (e.g. 9:16) so it matches the
-                    // cover image. This runs on the background executor and is best-effort: if it
-                    // fails we simply embed the original video.
-                    double target_ratio = getTargetVideoAspectRatio();
-                    if( target_ratio > 0.0 && video_file != null && video_file.exists() ) {
-                        cropped_file = new File(context.getCacheDir(),
-                                "rencam_live_crop_" + System.currentTimeMillis() + ".mp4");
-                        if( VideoCropper.cropToAspectRatio(video_file, cropped_file, target_ratio) ) {
-                            video_to_package = cropped_file;
-                        }
-                        else {
-                            deleteQuietly(cropped_file);
-                            cropped_file = null;
-                        }
-                    }
-                    ok = packageStill(still_file, still_uri, video_to_package, presentation_us);
-                    // If the (cropped) video failed to package, retry with the original video: a crop
-                    // problem must never cost the user their Live Photo (it would stay a plain JPEG).
-                    if( !ok && cropped_file != null && video_file != null && video_file.exists() ) {
-                        if( MyDebug.LOG )
-                            Log.d(TAG, "packaging with cropped video failed - retrying with original");
-                        ok = packageStill(still_file, still_uri, video_file, presentation_us);
-                    }
-                    if( !ok ) {
-                        Log.e(TAG, "failed to package live photo after retry - still left as plain JPEG");
-                    }
-                }
-                catch(Exception e) {
-                    Log.e(TAG, "failed to package live photo", e);
-                }
-                finally {
-                    deleteQuietly(video_file);
-                    if( cropped_file != null ) {
-                        deleteQuietly(cropped_file);
-                    }
-                    // This capture is now completely finished (success or failure), so let the next
-                    // queued shutter press start.
-                    releaseCapture();
-                }
-            }
-        });
-    }
 
     /** Packages the still (file or uri) with the given video. Returns true on success. */
     private boolean packageStill(File still_file, Uri still_uri, File video_file, long presentation_us) {
@@ -1393,23 +1353,23 @@ public class LivePhotoManager {
         // Remember that a flash actually fired, so the cover frame can be synced to it.
         flash_fired = true;
 
-        // iPhone-style three-pulse burst: pre-flash (metering), main flash (the still is sampled
-        // here), then a flicker flash after the capture - the "kedip-kedip" Slow-Sync look. Each
-        // pulse lasts at least ~50ms so it is captured by at least one frame of the 30fps buffer.
-        scheduleFlashStep(FLASH_PRE_START_MS, true);
-        scheduleFlashStep(FLASH_PRE_END_MS, false);
-        scheduleFlashStep(FLASH_MAIN_START_MS, true);
-        scheduleFlashStep(FLASH_MAIN_END_MS, false);
-        scheduleFlashStep(FLASH_FLICKER_START_MS, true);
-        scheduleFlashStep(FLASH_FLICKER_END_MS, false);
+        // iPhone-style four-phase burst: wait -> main flash (dimmer, longer) -> off -> quick flicker
+        // -> capture flash (brightest, maxed out - the "cekrek"). The still is sampled during the
+        // capture flash (see COVER_DELAY_MS), so it is always taken at the moment of maximum light.
+        scheduleFlashStep(FLASH_MAIN_START_MS, true, FLASH_MAIN_ALPHA);
+        scheduleFlashStep(FLASH_MAIN_END_MS, false, 0);
+        scheduleFlashStep(FLASH_FLICKER_START_MS, true, FLASH_FLICKER_ALPHA);
+        scheduleFlashStep(FLASH_FLICKER_END_MS, false, 0);
+        scheduleFlashStep(FLASH_CAPTURE_START_MS, true, FLASH_CAPTURE_ALPHA);
+        scheduleFlashStep(FLASH_CAPTURE_END_MS, false, 0);
     }
 
-    /** Schedules one on/off step of the flash burst. */
-    private void scheduleFlashStep(long delay_ms, final boolean on) {
+    /** Schedules one on/off step of the flash burst. {@code alpha} is the screen-flash brightness. */
+    private void scheduleFlashStep(long delay_ms, final boolean on, final int alpha) {
         Runnable r = new Runnable() {
             @Override
             public void run() {
-                setFlashHardware(on);
+                setFlashHardware(on, alpha);
             }
         };
         flash_runnables.add(r);
@@ -1417,11 +1377,11 @@ public class LivePhotoManager {
     }
 
     /** Actually turns the LED torch / front screen on or off. */
-    private void setFlashHardware(boolean on) {
+    private void setFlashHardware(boolean on, int alpha) {
         if( flash_use_screen ) {
             if( host != null ) {
                 if( on ) {
-                    host.turnFrontScreenFlashOn();
+                    host.turnFrontScreenFlashOn(alpha);
                     used_screen_flash = true;
                 }
                 else {
